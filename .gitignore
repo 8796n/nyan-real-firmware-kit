@@ -1,0 +1,10 @@
+# Never commit firmware. Not the vendor's, not the patched result.
+*.bin
+
+# The stock files you supply live here; only the instructions are tracked.
+firmware/*
+!firmware/README.md
+
+__pycache__/
+*.pyc
+.venv/

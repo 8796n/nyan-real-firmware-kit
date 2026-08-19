@@ -362,8 +362,12 @@ its licensing is between you and the vendor.
 
 ## Contributing
 
-Bug reports and hardware test results are welcome, especially from models or host
-configurations that have not been tested.
+Bug reports and hardware test results are welcome, especially from devices,
+operating systems or host setups that have not been tested here -- and
+especially when you measure something different from the tables in
+`xreal/air/docs/verification.md`.
 
 **Do not post firmware binaries, download links, or requests for either.** Such
 issues and comments will be removed without discussion.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.

@@ -1,0 +1,71 @@
+name: 不具合の報告 / Bug report
+description: ツールが落ちる、期待と違う動きをする / A tool crashes or behaves differently from what is documented
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **ファームウェアのバイナリやダウンロードリンクは貼らないでください。**
+        入手方法を尋ねる質問にも回答しません。該当する投稿は議論なく削除します。
+
+        **Do not attach firmware binaries or download links,** and do not ask
+        where to obtain firmware. Such posts are removed without discussion.
+
+        グラスが起動しなくなった場合は、先に README の
+        「うまくいかなかったとき」を読んでください。多くの故障は復旧できます。
+
+        If the glasses will not start, read the troubleshooting section in the
+        README first. Most failures are recoverable.
+
+  - type: input
+    id: tool
+    attributes:
+      label: どのツールか / Which tool
+      placeholder: xreal/air/build_dp.py / xreal/dp_flash.py / xreal/display.py ...
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 実行環境 / Environment
+      placeholder: Windows 11 / Python 3.12 / hidapi 0.15.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: 実行したコマンド / Command you ran
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: 出力 / Output
+      description: |
+        **エラーメッセージとトレースバックをそのまま貼ってください。**
+        Paste the error and traceback verbatim.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動作 / What you expected
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 確認 / Checks
+      options:
+        - label: ファームウェアのバイナリやダウンロードリンクを含めていません / This report contains no firmware binaries or download links
+          required: true
+        - label: 純正ファイルの SHA-256 が README の値と一致することを確認しました / The stock file I used matches the SHA-256 in the README
+          required: false

@@ -1,0 +1,84 @@
+name: 実機検証の報告 / Hardware test result
+description: 未検証の機種・OS・ホスト環境での結果、または記録と違う測定値 / Results on an untested device, OS or host, or measurements that differ from the recorded ones
+title: "[HW] "
+labels: ["hardware-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        いちばん価値のある報告です。**うまくいかなかった場合も歓迎します。**
+        値が記録と違うこと自体が有益な情報です。
+
+        The most valuable kind of report. **Negative results are welcome too** --
+        a measurement that differs from the recorded one is useful information.
+
+        ---
+
+        **ファームウェアのバイナリやダウンロードリンクは貼らないでください。**
+        該当する投稿は議論なく削除します。
+
+        **Do not attach firmware binaries or download links.** Such posts are
+        removed without discussion.
+
+  - type: input
+    id: device
+    attributes:
+      label: 機種 / Device
+      placeholder: XREAL Air (gen 1) / Air 2 / Air 2 Pro / xbx a01+ ...
+    validations:
+      required: true
+
+  - type: input
+    id: image
+    attributes:
+      label: 書き込んだイメージの SHA-256 / SHA-256 of the image you flashed
+      description: ビルダが出力した値をそのまま。書き込んでいない場合は「なし」/ As printed by the builder. Put "none" if you did not flash.
+      placeholder: D5D34FB0ED0AB49B92D793CCF8384E61B1C1274AAC45293911F3CAF325BDC793
+    validations:
+      required: true
+
+  - type: textarea
+    id: host
+    attributes:
+      label: ホスト環境 / Host setup
+      description: OS、GPU、接続方法（直挿し / HDMI 変換器 / ドック など）
+      placeholder: |
+        OS:   Windows 11 / Ubuntu 24.04 / macOS 15 ...
+        GPU:  NVIDIA RTX 3060 / AMD / Intel / Apple Silicon ...
+        接続: USB-C 直挿し / HDMI-USB-C 変換器（型番） / ドック ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: 結果 / What happened
+      description: |
+        期待した動作と、実際の動作。
+        What you expected, and what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: ツールの出力 / Tool output
+      description: |
+        **要約せず、そのまま貼ってください。** 役に立つのは次のあたりです。
+
+        - `python xreal/edid_dump.py`
+        - `python common/display_signal.py`
+        - `python xreal/display.py`
+        - `python xreal/vsync.py`
+        - `python xreal/dpreg.py` / `panelreg.py`（本キットの MCU が必要）
+
+        **Paste it verbatim, do not summarise.**
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 目視の所見など / Anything you saw
+      description: 縦筋、画面の切れ、ちらつき、色、音声など / Striping, cropping, flicker, colour, audio ...

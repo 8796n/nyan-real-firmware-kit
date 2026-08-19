@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 投稿する前に読んでください / Read this before posting
+    url: https://github.com/8796n/nyan-real-firmware-kit/blob/main/CONTRIBUTING.md
+    about: ファームウェアのバイナリ・ダウンロードリンク・入手方法の質問は削除します。/ Firmware binaries, download links and where-to-get questions are removed.
+  - name: 使い方と復旧手順 / Usage and recovery
+    url: https://github.com/8796n/nyan-real-firmware-kit/blob/main/README.md
+    about: 必要なファイルとその SHA-256、書き込み手順、故障時の復旧方法。/ The files you need with their hashes, how to flash, and how to recover.

@@ -109,6 +109,32 @@ PyPI には `import hid` を提供するパッケージが2つあります。**�
 コンパイル済みのバインディングが同梱されています。もう一方の `hid` は別途システムに
 libhidapi が要る ctypes ラッパーです。両方入れると import が混乱します。
 
+### 対応 OS
+
+**検証したのは Windows です。**
+
+| ツール | Windows | Linux / macOS |
+|---|---|---|
+| `xreal/air/build_dp.py` / `build_mcu.py` | 動く | **動く**（純粋な Python） |
+| `xreal/dp_flash.py` / `mcu_flash.py` | 動く | 動くはず（未検証） |
+| `xreal/display.py` / `dpreg.py` / `panelreg.py` / `vsync.py` | 動く | 動くはず（未検証） |
+| `xreal/edid_dump.py` | 動く | **動きません**（PowerShell と WMI を使います） |
+| `common/display_signal.py` | 動く | **動きません**（Windows の表示設定 API を使います） |
+
+イメージのビルドはどの OS でもできます。グラスと話すツールは hidapi しか使っていないので
+Linux や macOS でも動くはずですが、**こちらでは確認していません。**
+
+`xreal/display.py --probe` は切替後に `edid_dump.py` を呼ぶため、この組み合わせだけは
+Windows が要ります。モードの読み書きだけなら OS を問いません。
+
+**Linux では HID デバイスへのアクセス権が要ります。** root で実行するか、udev ルールを
+置いてください。
+
+```
+# /etc/udev/rules.d/70-xreal.rules
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3318", MODE="0666"
+```
+
 ---
 
 ## 何をするツールか — XREAL Air（第1世代）

@@ -112,6 +112,33 @@ which ships a compiled binding. The other, named `hid`, is a ctypes wrapper that
 needs a system libhidapi installed separately. Installing both leads to confusing
 import errors.
 
+### Operating systems
+
+**Verified on Windows.**
+
+| Tool | Windows | Linux / macOS |
+|---|---|---|
+| `xreal/air/build_dp.py` / `build_mcu.py` | works | **works** (pure Python) |
+| `xreal/dp_flash.py` / `mcu_flash.py` | works | should work, untested |
+| `xreal/display.py` / `dpreg.py` / `panelreg.py` / `vsync.py` | works | should work, untested |
+| `xreal/edid_dump.py` | works | **no** -- uses PowerShell and WMI |
+| `common/display_signal.py` | works | **no** -- uses the Windows display-config API |
+
+Building an image works anywhere. The tools that talk to the glasses use nothing
+but hidapi, so they ought to work on Linux and macOS, but that has not been
+checked here.
+
+`xreal/display.py --probe` calls `edid_dump.py` after switching, so that one
+combination needs Windows. Reading and setting the mode works on any OS.
+
+**On Linux you need permission to reach the HID device.** Run as root, or install
+a udev rule.
+
+```
+# /etc/udev/rules.d/70-xreal.rules
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3318", MODE="0666"
+```
+
 ---
 
 ## What it does — XREAL Air (gen 1)

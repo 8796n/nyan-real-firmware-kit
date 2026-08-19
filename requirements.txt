@@ -1,0 +1,15 @@
+# Needed only by the tools that talk to the glasses over USB HID:
+#   xreal/dp_flash.py  xreal/mcu_flash.py  xreal/display.py
+#   xreal/dpreg.py     xreal/panelreg.py   xreal/vsync.py
+#
+# The image builders need nothing at all -- they are standard library only.
+# xreal/edid_dump.py and common/display_signal.py are also dependency-free;
+# they read what Windows already knows.
+#
+# Note there are two different PyPI packages that both provide "import hid".
+# This is the one you want: it ships the compiled HIDAPI binding. The other one,
+# named "hid", is a ctypes wrapper that needs a system libhidapi installed
+# separately. Installing both leads to confusing import errors.
+#
+# Verified with 0.15.0. No upper bound is pinned.
+hidapi

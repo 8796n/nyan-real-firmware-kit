@@ -93,8 +93,24 @@ These are the official Air (gen 1) images. The hashes are published so you can
 verify that whatever you obtained is the exact file this tooling expects — the
 builders refuse to run on anything else.
 
-You also need Python 3.10+ and `hidapi`. Nothing else; the builders are standard
-library only.
+### Python
+
+Python 3.10+. **What you need to install depends on what you are doing.**
+
+| Task | Requires |
+|---|---|
+| Building an image | **nothing** -- standard library only |
+| Reading the EDID or the Windows display signal | **nothing** -- it reads what the OS already knows |
+| Flashing, or reading registers | `hidapi` |
+
+```bash
+pip install -r requirements.txt
+```
+
+Two different PyPI packages provide `import hid`. **The one you want is `hidapi`**,
+which ships a compiled binding. The other, named `hid`, is a ctypes wrapper that
+needs a system libhidapi installed separately. Installing both leads to confusing
+import errors.
 
 ---
 

@@ -45,7 +45,8 @@ Three things are true at once, and you need all three:
    tool cannot make a backup for you. Other models are covered in their own
    sections.
 
-**The manufacturer's own apps may stop working.** See
+**Do not expect the manufacturer's apps to work properly**, because their optical
+correction data only covers 1080p. See
 [About the vendor's own apps](#about-the-vendors-own-apps) below.
 
 We do not provide, host, mirror, or explain how to obtain vendor firmware, and we
@@ -209,23 +210,33 @@ template and leaves the others byte-identical to stock.
 
 ## About the vendor's own apps
 
-**The manufacturer's apps are not something this kit tests against.** They may
-stop working, or behave in ways nobody here has checked. Decide whether you
-depend on one before you flash.
+**Do not expect the manufacturer's apps to work properly.** Apps that render into
+the glasses -- Nebula, XREAL Beam Pro and the like -- **are written around
+1080p.**
 
-### Version strings are left alone
+### The reason is the optical correction data
+
+These apps draw with a correction applied to cancel the lens distortion, and
+**that correction data exists only for 1080p.** Drive the panels at 1200p and the
+coordinates the app assumes stop lining up with what is actually displayed.
+
+So this is not a "might work, might not" situation -- **it does not line up, by
+construction.** If you want to use a vendor app, either run at 1080p while you
+use it, or go back to stock.
+
+**Using the glasses as an external display is unaffected.** For anything that
+sends a plain image without optical correction -- an ordinary desktop, and the
+use this kit is built for -- 1200p is simply better.
+
+### Nothing reverts behind your back
 
 This build never touches the container header, so **the firmware version the
 glasses report stays exactly as stock** (`1140` for the DP bridge,
-`07.1.02.387_20240428` for the MCU). That cuts both ways:
+`07.1.02.387_20240428` for the MCU).
 
-- no app will prompt you to update because of a version mismatch
-- but **if an app performs a firmware update, it overwrites the modification
-  with stock**
-
-Being overwritten breaks nothing; build and flash again and you are back. The
-catch is that **it can happen without you noticing**, so if behaviour changes,
-check which image is actually running with `python xreal/edid_dump.py`.
+Because of that, Nebula and Beam Pro do not see a device that needs updating and
+**will not push a firmware update at you.** You will not find the modification
+quietly replaced with stock.
 
 ### Where it conflicts by construction
 
@@ -236,10 +247,8 @@ check which image is actually running with `python xreal/edid_dump.py`.
 - **After an automatic switch, the manual audio toggle is locked for the rest of
   the power session.** An app trying to switch audio will not get through
   either. Replugging clears it
-- **The EDID advertises modes stock never does.** An app that assumes a fixed
-  1080p will be looking at something it did not expect
 
-### Going back
+### Going back to stock
 
 Write the stock files you obtained back:
 

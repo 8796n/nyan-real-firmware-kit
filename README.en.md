@@ -45,6 +45,9 @@ Three things are true at once, and you need all three:
    tool cannot make a backup for you. Other models are covered in their own
    sections.
 
+**The manufacturer's own apps may stop working.** See
+[About the vendor's own apps](#about-the-vendors-own-apps) below.
+
 We do not provide, host, mirror, or explain how to obtain vendor firmware, and we
 will not answer questions asking for it. Issues and pull requests containing
 firmware binaries or download links will be removed.
@@ -201,6 +204,51 @@ at 1200p, none of this affects you.
 XREAL's stock container carries EDID templates for several models and the
 header's project code selects one; the Air (gen 1) builder touches only the Air
 template and leaves the others byte-identical to stock.
+
+---
+
+## About the vendor's own apps
+
+**The manufacturer's apps are not something this kit tests against.** They may
+stop working, or behave in ways nobody here has checked. Decide whether you
+depend on one before you flash.
+
+### Version strings are left alone
+
+This build never touches the container header, so **the firmware version the
+glasses report stays exactly as stock** (`1140` for the DP bridge,
+`07.1.02.387_20240428` for the MCU). That cuts both ways:
+
+- no app will prompt you to update because of a version mismatch
+- but **if an app performs a firmware update, it overwrites the modification
+  with stock**
+
+Being overwritten breaks nothing; build and flash again and you are back. The
+catch is that **it can happen without you noticing**, so if behaviour changes,
+check which image is actually running with `python xreal/edid_dump.py`.
+
+### Where it conflicts by construction
+
+- **No app can talk to the glasses while DP audio is active.** The USB composite
+  device closes, which is stock behaviour -- but this build enters DP audio
+  *automatically* on sources that carry no USB data, so you meet it more often
+  than on stock
+- **After an automatic switch, the manual audio toggle is locked for the rest of
+  the power session.** An app trying to switch audio will not get through
+  either. Replugging clears it
+- **The EDID advertises modes stock never does.** An app that assumes a fixed
+  1080p will be looking at something it did not expect
+
+### Going back
+
+Write the stock files you obtained back:
+
+```bash
+python xreal/dp_flash.py  --restore --flash
+python xreal/mcu_flash.py --restore --flash
+```
+
+Both need the stock file present in `firmware/`.
 
 ---
 

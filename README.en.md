@@ -262,8 +262,9 @@ The builder does not just apply a patch. It proves the result:
 - the firmware's own 8051 post-build helper is executed in a small emulator over
   every possible state vector, to prove which EDID timing slots each mode writes
 
-Design notes and the full hardware acceptance record for each release live in
-`xreal/air/docs/`.
+Design notes and the full hardware acceptance record live in `xreal/air/docs/`.
+Those two are **Japanese only**; the protocol and container references under
+`docs/` are available in both languages.
 
 ---
 

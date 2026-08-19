@@ -1,5 +1,7 @@
 # XREAL Air 系の USB HID プロトコル
 
+*[English version](hid-protocol.en.md)*
+
 `xreal/` 以下のツールがグラスと話すための仕様です。読み出し系のコマンドも書き込み系も、
 同じ 64 バイトのフレームに乗ります。
 

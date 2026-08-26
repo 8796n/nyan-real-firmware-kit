@@ -25,10 +25,12 @@ Issue、Pull Request、コメント、いずれも対象です。該当するも
 
 **いちばん価値があります。** とくに次のような報告です。
 
-- 未検証の機種（Air 2、Air 2 Pro など）
 - 未検証の OS（Linux、macOS）
 - 未検証のホスト環境（AMD、Intel 内蔵、Apple Silicon、各種 HDMI 変換器、ゲーム機）
-- `xreal/air/docs/verification.md` の表と**違う値**が出たケース
+- `xreal/air/docs/verification.md`または`xreal/air2/docs/verification.md`の表と**違う値**が出たケース
+
+対象はREADMEの「公式ファームウェアから変わること」に記載された機種だけです。対応機種以外の検証結果や対応追加は
+受け付けません。
 
 値が違うこと自体が有益な情報です。「合わなかった」報告を歓迎します。
 
@@ -42,12 +44,6 @@ Issue、Pull Request、コメント、いずれも対象です。該当するも
 
 再現手順と、ツールが実際に出力した内容を添えてください。
 
-### 他機種への対応
-
-`docs/hid-protocol.md` の「移植するときに見る順番」から始めてください。
-**フレームが通ることと、任意の msgid が実装されていることは別です。**
-コンテナ形式も機種ごとに違います（`docs/container-format.md`）。
-
 ---
 
 ## コードを送るとき
@@ -59,12 +55,14 @@ Issue、Pull Request、コメント、いずれも対象です。該当するも
 
 ### 検証を弱めないでください
 
-ビルダは結果を検証してから返します。SHA の照合、レコードごとの before 検査、
-EDID のデコード、8051 helper の全状態ベクタ実行。**`--force` はありません。**
+ビルダは結果を検証してから返します。SHAの照合、レコードごとのbefore検査、EDIDのデコードに加え、
+Air DPでは8051 helperの全状態ベクタ、Air 2系DPではEDID / RGB profile contract、
+MCUでは表示・復旧policy modelを検査します。**`--force`はありません。**
 これは意図的な設計です。検証を迂回する仕組みを追加する Pull Request は受け付けません。
 
-書き込みツールも同じです。projectCode の照合、コンテナ CRC、bank0 tag の検査は、
-グラスを壊さないためにあります。
+書き込みツールも同じです。対応する接続PID、その機種向けの既知SHA-256との完全一致、
+コンテナCRC、DPのbank0 tag、機種に合う公式復旧イメージをすべて確認します。
+projectCodeはその一部にすぎず、Air 2とAir 2 Proは`0x0900`を共有します。
 
 ---
 
@@ -106,12 +104,15 @@ not for you.
 
 **These are the most valuable contributions.** Especially:
 
-- models not verified here (Air 2, Air 2 Pro, ...)
 - operating systems not verified here (Linux, macOS)
 - host setups not verified here (AMD, Intel integrated, Apple Silicon, HDMI
   converters, consoles)
 - **any case where you measure something different** from the tables in
-  `xreal/air/docs/verification.md`
+  `xreal/air/docs/verification.md` or `xreal/air2/docs/verification.md`
+
+The scope is limited to devices listed under "What changes from the official
+firmware" in the README. Test results or support additions for other devices are
+not accepted.
 
 A mismatch is useful information. Reports that something did not line up are
 welcome.
@@ -126,13 +127,6 @@ Include:
 
 Include how to reproduce it and what the tools actually printed.
 
-### Support for other devices
-
-Start from "移植するときに見る順番" (porting checklist) in
-`docs/hid-protocol.md`. **A frame going through does not mean a given message id
-is implemented**, and the container format differs per device too -- see
-`docs/container-format.md`.
-
 ---
 
 ## Sending code
@@ -146,12 +140,16 @@ is implemented**, and the container format differs per device too -- see
 ### Do not weaken the verification
 
 The builders prove their result before returning it: hash checks, per-record
-before-image guards, an EDID decode, and execution of the 8051 helper over every
-state vector. **There is no `--force`,** and that is deliberate. Pull requests
-that add a way around the verification will not be accepted.
+before-image guards, and an EDID decode. Air DP additionally runs the 8051 helper
+over every state vector; Air 2-family DP checks the EDID and RGB-profile
+contracts; MCU builders check their display and recovery policy models. **There
+is no `--force`,** and that is deliberate. Pull requests that add a way around
+the verification will not be accepted.
 
-The same goes for the flashers. The project-code match, the container CRC and
-the bank0 tag check exist to keep the glasses alive.
+The same goes for the flashers. They require a supported connected PID, an exact
+known SHA-256 for that model, the container CRC, the DP bank0 tag, and the
+matching official stock recovery image. projectCode is only one part of this;
+Air 2 and Air 2 Pro share `0x0900`.
 
 ---
 

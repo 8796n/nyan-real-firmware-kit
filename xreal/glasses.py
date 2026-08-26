@@ -22,9 +22,9 @@ import hid
 
 VID = 0x3318
 
-# This table identifies what is plugged in. It is not a list of supported
-# devices: the tools here are written for and verified on the Air (gen 1).
-# The XREAL One family speaks a different protocol entirely and is not listed.
+# This table identifies what is plugged in. It is not a write-support list:
+# each flasher applies its own PID/image/recovery gate. The XREAL One family
+# speaks a different protocol entirely and is not listed.
 #
 # The MCU reports APP or BOOT depending on its own state. That says nothing
 # about the DP bridge: seeing BOOT only means the MCU sits in its bootloader,

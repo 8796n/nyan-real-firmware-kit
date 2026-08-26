@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-r"""Read and write the Sony micro-OLED panel registers, through the MCU peek.
+r"""Read the Sony micro-OLED panel registers through the MCU peek.
 
 REQUIRES THE MCU IMAGE BUILT BY THIS KIT
     The peek lives on msgid 0x5B. Stock firmware answers that message id with
@@ -19,23 +19,22 @@ WHY READ THEM
     registers 0x01..0xBF. No such file is distributed here. Without it the
     reference columns simply read "--" and everything else still works.
 
-PANEL REGISTERS ARE VOLATILE
-    They live in RAM, not flash. A bad write is undone by a power cycle. The
-    one to be careful with is reg 0x82, which selects the register bank: put it
-    back to 0 when you are done, which --dump does for you.
+THIS PUBLIC TOOL IS READ-ONLY
+    An earlier research image exposed a generic panel write on msgid 0x5B, but
+    the released Air MCU reused that code space for row-count helpers.  Its
+    0x5B handler accepts only the A5 read request.  Model-specific experiments
+    must use their own guarded command instead of pretending generic writes are
+    present here.
 
 USAGE
   python panelreg.py --selftest            check only that the peek responds
   python panelreg.py --dump                dump 0x00..0xBF for both eyes
-  python panelreg.py --dump --map 2        switch to bank 2 first, then dump
   python panelreg.py --read 0 0x0E         read one register from the right eye
-  python panelreg.py --write 0 0x0E 0x44   write it (volatile)
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -51,7 +50,7 @@ except Exception:
     pass
 
 PEEK_MSGID = 0x5B
-MAGIC_R, MAGIC_W = 0xA5, 0x5A
+MAGIC_R = 0xA5
 # Confirmed on hardware: eye=0 is the right eye and eye=1 the left.
 EYES = {0: "right", 1: "left"}
 REF = HERE / "ecx34x_init_ref.json"
@@ -61,13 +60,20 @@ MCU_WRITES = {0x00, 0x02, 0x0B, 0x10, 0x15, 0x3B, 0x3C, 0x82, 0x8B, 0xBF}
 
 
 def open_ctrl():
-    for pid in PIDS:
-        paths = {d["interface_number"]: d["path"] for d in hid.enumerate(VID, pid)}
-        if CTRL_IF in paths:
-            h = hid.device()
-            h.open_path(paths[CTRL_IF])
-            return h, pid
-    sys.exit("XREAL control interface MI_04 not found.")
+    controls = [
+        d for d in hid.enumerate(VID, 0)
+        if d.get("interface_number") == CTRL_IF
+        and int(d.get("product_id", 0)) in PIDS
+    ]
+    if not controls:
+        sys.exit("XREAL control interface MI_04 not found.")
+    if len(controls) != 1:
+        pids = ", ".join(f"0x{int(d['product_id']):04X}" for d in controls)
+        sys.exit(f"multiple XREAL control devices found ({pids}); connect exactly one pair")
+    entry = controls[0]
+    h = hid.device()
+    h.open_path(entry["path"])
+    return h, int(entry["product_id"])
 
 
 def xfer(h, payload: bytes, wait=1.0):
@@ -92,10 +98,6 @@ def xfer(h, payload: bytes, wait=1.0):
 def read_reg(h, eye: int, reg: int):
     r = xfer(h, bytes([MAGIC_R, eye & 1, reg & 0xFF]))
     return None if r is None else r[1]
-
-
-def write_reg(h, eye: int, reg: int, val: int):
-    return xfer(h, bytes([MAGIC_W, eye & 1, reg & 0xFF, val & 0xFF]))
 
 
 def load_ref():
@@ -127,22 +129,12 @@ def cmd_selftest(h):
     return True
 
 
-def cmd_dump(h, lo, hi, mapno):
+def cmd_dump(h, lo, hi):
     ref = load_ref()
-    if mapno is not None:
-        for e in (0, 1):
-            write_reg(h, e, 0x82, mapno)
-        print("  switched reg 0x82 = %d (bank %d)\n" % (mapno, mapno))
-
     got = {}
     for e in (0, 1):
         for r in range(lo, hi + 1):
             got[(e, r)] = read_reg(h, e, r)
-
-    if mapno is not None:
-        for e in (0, 1):
-            write_reg(h, e, 0x82, 0)
-        print("  restored reg 0x82 = 0 (bank 0)\n")
 
     a = ref.get("setA(ECX343E)|5L2_120")
     b = ref.get("ECX348|5L2_120")
@@ -186,10 +178,7 @@ def main():
     ap.add_argument("--dump", action="store_true")
     ap.add_argument("--lo", default="0x00")
     ap.add_argument("--hi", default="0xBF")
-    ap.add_argument("--map", dest="mapno", type=int, default=None,
-                    help="select a register bank with reg 0x82 first, then restore it to 0")
     ap.add_argument("--read", nargs=2, metavar=("EYE", "REG"))
-    ap.add_argument("--write", nargs=3, metavar=("EYE", "REG", "VAL"))
     a = ap.parse_args()
 
     h, pid = open_ctrl()
@@ -200,17 +189,10 @@ def main():
             v = read_reg(h, e, r)
             print("  %s eye reg 0x%02X = %s" % (EYES[e & 1], r, "no answer" if v is None else "0x%02X" % v))
             return
-        if a.write:
-            e, r, v = (int(x, 0) for x in a.write)
-            print("  %s eye reg 0x%02X <- 0x%02X  (volatile; a power cycle undoes it)" % (EYES[e & 1], r, v))
-            write_reg(h, e, r, v)
-            back = read_reg(h, e, r)
-            print("  read back = %s" % ("no answer" if back is None else "0x%02X" % back))
-            return
         if a.selftest or not a.dump:
             if not cmd_selftest(h) or not a.dump:
                 return
-        cmd_dump(h, int(a.lo, 0), int(a.hi, 0), a.mapno)
+        cmd_dump(h, int(a.lo, 0), int(a.hi, 0))
     finally:
         try:
             h.close()

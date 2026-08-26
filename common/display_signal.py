@@ -16,6 +16,12 @@ from ctypes import wintypes as W
 
 QDC_ONLY_ACTIVE_PATHS = 0x2
 GET_SOURCE_NAME = 1
+GET_TARGET_NAME = 2
+TARGET_NAME_EDID_IDS_VALID = 0x4
+PATH_ACTIVE = 0x1
+TARGET_IN_USE = 0x1
+AIR_EDID_MANUFACTURER_RAW = 0x4736
+AIR_EDID_PRODUCT = 0x3132
 
 
 class LUID(C.Structure):
@@ -82,12 +88,20 @@ class SOURCE_NAME(C.Structure):
     _fields_ = [("header", DEVICE_HEADER), ("viewGdiDeviceName", W.WCHAR * 32)]
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("display", nargs="?",
-                    help=r"e.g. \\.\DISPLAY2; omit to list every active path")
-    args = ap.parse_args()
+class TARGET_NAME(C.Structure):
+    _fields_ = [
+        ("header", DEVICE_HEADER),
+        ("flags", W.UINT),
+        ("outputTechnology", W.UINT),
+        ("edidManufactureId", W.USHORT),
+        ("edidProductCodeId", W.USHORT),
+        ("connectorInstance", W.UINT),
+        ("monitorFriendlyDeviceName", W.WCHAR * 64),
+        ("monitorDevicePath", W.WCHAR * 128),
+    ]
 
+
+def active_paths() -> list[dict]:
     u = C.WinDLL("user32", use_last_error=True)
     u.GetDisplayConfigBufferSizes.argtypes = [W.UINT, C.POINTER(W.UINT), C.POINTER(W.UINT)]
     u.GetDisplayConfigBufferSizes.restype = W.LONG
@@ -109,26 +123,80 @@ def main():
     if rc:
         raise SystemExit(f"QueryDisplayConfig failed: {rc}")
 
-    found = False
+    result = []
     for path in paths[:path_count.value]:
-        name = SOURCE_NAME()
-        name.header.type = GET_SOURCE_NAME
-        name.header.size = C.sizeof(name)
-        name.header.adapterId = path.sourceInfo.adapterId
-        name.header.id = path.sourceInfo.id
-        if u.DisplayConfigGetDeviceInfo(C.byref(name.header)):
+        source_name = SOURCE_NAME()
+        source_name.header.type = GET_SOURCE_NAME
+        source_name.header.size = C.sizeof(source_name)
+        source_name.header.adapterId = path.sourceInfo.adapterId
+        source_name.header.id = path.sourceInfo.id
+        if u.DisplayConfigGetDeviceInfo(C.byref(source_name.header)):
             continue
-        device = name.viewGdiDeviceName
-        if args.display and device.upper() != args.display.upper():
+
+        target_name = TARGET_NAME()
+        target_name.header.type = GET_TARGET_NAME
+        target_name.header.size = C.sizeof(target_name)
+        target_name.header.adapterId = path.targetInfo.adapterId
+        target_name.header.id = path.targetInfo.id
+        if u.DisplayConfigGetDeviceInfo(C.byref(target_name.header)):
             continue
+
         source = modes[path.sourceInfo.modeInfoIdx].modeInfo.sourceMode
         signal = modes[path.targetInfo.modeInfoIdx].modeInfo.targetMode.targetVideoSignalInfo
         hz = (signal.vSyncFreq.Numerator / signal.vSyncFreq.Denominator
               if signal.vSyncFreq.Denominator else 0.0)
-        print(f"{device}: desktop={source.width}x{source.height}; "
-              f"active={signal.activeSize.cx}x{signal.activeSize.cy}; "
-              f"total={signal.totalSize.cx}x{signal.totalSize.cy}; "
-              f"refresh={hz:.3f}Hz; pixel={signal.pixelRate}; scaling={path.targetInfo.scaling}")
+        result.append({
+            "device": source_name.viewGdiDeviceName,
+            "desktop": (source.width, source.height),
+            "active": (signal.activeSize.cx, signal.activeSize.cy),
+            "total": (signal.totalSize.cx, signal.totalSize.cy),
+            "refresh": hz,
+            "pixel": signal.pixelRate,
+            "scaling": path.targetInfo.scaling,
+            "path_flags": path.flags,
+            "target_available": bool(path.targetInfo.targetAvailable),
+            "target_status": path.targetInfo.statusFlags,
+            "target_name_flags": target_name.flags,
+            "manufacturer": target_name.edidManufactureId,
+            "product": target_name.edidProductCodeId,
+            "friendly_name": target_name.monitorFriendlyDeviceName,
+            "monitor_path": target_name.monitorDevicePath,
+        })
+    return result
+
+
+def air_signal() -> dict:
+    matches = [
+        item for item in active_paths()
+        if item["path_flags"] & PATH_ACTIVE
+        and item["target_available"]
+        and item["target_status"] & TARGET_IN_USE
+        and item["target_name_flags"] & TARGET_NAME_EDID_IDS_VALID
+        and item["manufacturer"] == AIR_EDID_MANUFACTURER_RAW
+        and item["product"] == AIR_EDID_PRODUCT
+        and item["friendly_name"] == "Air"
+        and item["monitor_path"].upper().startswith(r"\\?\DISPLAY#MRG3132#")
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"expected one active Air display path, found {len(matches)}")
+    return matches[0]
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("display", nargs="?",
+                    help=r"e.g. \\.\DISPLAY2; omit to list every active path")
+    args = ap.parse_args()
+
+    found = False
+    for item in active_paths():
+        if args.display and item["device"].upper() != args.display.upper():
+            continue
+        print(f"{item['device']}: desktop={item['desktop'][0]}x{item['desktop'][1]}; "
+              f"active={item['active'][0]}x{item['active'][1]}; "
+              f"total={item['total'][0]}x{item['total'][1]}; "
+              f"refresh={item['refresh']:.3f}Hz; pixel={item['pixel']}; "
+              f"scaling={item['scaling']}")
         found = True
     if args.display and not found:
         raise SystemExit(f"active path not found: {args.display}")

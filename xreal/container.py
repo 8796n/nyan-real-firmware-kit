@@ -8,7 +8,7 @@ Layout of the first 0x40 bytes:
 
     [0x00:0x04]  CRC-32 over d[8 : 8+length]        DP: little-endian
     [0x04:0x08]  length, little-endian
-    [0x08:0x0C]  project code -- which model this image is for
+    [0x08:0x0C]  project code -- container family (some models share one)
     [0x0C:0x10]  firmware type (2 = DP bridge)
     [0x10:0x24]  name, NUL terminated ("1140")
     [0x24:0x32]  build string

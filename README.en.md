@@ -8,9 +8,9 @@ Display-only glasses often ship with firmware that never offers the panel's real
 resolution, hides the best display mode, or leaves you with no audio on certain
 sources. This repository collects what it takes, per model, to remove those
 limits so the glasses work properly with Spatial Wall. **What that takes differs
-per model:** some need a firmware build and a flash, others only need a
-host-side tool to reach a capability the hardware already has. Either way the
-result is useful on its own even if you do not use Spatial Wall.
+per model.** Every currently supported model uses a matched DP-bridge and MCU
+firmware update. The result is useful on its own even if you do not use Spatial
+Wall.
 
 > **nyan Real / Spatial Wall** is an application for using display glasses as a
 > spatial display, on Windows, macOS, GNOME and Raspberry Pi. Only its manual is
@@ -42,10 +42,12 @@ Three things are true at once, and you need all three:
    it.** For the XREAL Air (gen 1) it is **confirmed impossible**: static
    analysis of the stock MCU application found no host-facing message id that
    exposes an address-and-length read of the application or boot region, so the
-   tool cannot make a backup for you. Other models are covered in their own
-   sections.
+   tool cannot make a backup for you. Full firmware readback has not been
+   established for Air 2 / Air 2 Pro, and this tooling provides no backup
+   function for any supported model.
 
-**If you use Nebula on an XREAL Beam Pro, do not flash this** -- it stops working.
+**If you use an Air (gen 1) with Nebula on an XREAL Beam Pro, do not flash the
+Air build** — it stops working.
 See [About the vendor's own apps](#about-the-vendors-own-apps) below.
 
 We do not provide, host, mirror, or explain how to obtain vendor firmware, and we
@@ -54,364 +56,377 @@ firmware binaries or download links will be removed.
 
 ---
 
-## Supported devices
+## What changes from the official firmware
 
-| Device | Status |
+The supported models are the XREAL Air (gen 1), Air 2, and Air 2 Pro. Each update
+uses a matched **DP bridge and MCU pair**. Air 2 and Air 2 Pro share both the
+official inputs and the outputs produced by this kit.
+
+### XREAL Air (gen 1)
+
+| Area | Official firmware | This build |
+|---|---|---|
+| Native RGB | Non-RGB OLED path | Displays native 2D and Full-SBS in RGB |
+| Native resolution | `1920x1080` | Adds `1920x1200` as the preferred timing; `1920x1080` remains available |
+| 720p | Not advertised in the EDID | Mode 1 advertises true `1280x720@60` and scales it to the full panel through the official YCbCr scaler path; fixed 72 / 90 / 120 Hz modes do not advertise it |
+| Full-SBS | `3840x1080` at 60 / 72 Hz; a 90 Hz mode is present but does not work correctly because the link bandwidth is insufficient | `3840x1200` at 60 / 72 / 90 Hz; 90 Hz also works correctly |
+| Audio without USB data | Manual switch or supported Adapter notification | After about five seconds, re-advertises an LPCM EDID and enters DP audio at the saved volume, with a blackout |
+| HDMI hotplug while the converter stays powered | Some converters fail to restore video | Automatically restores video within several seconds after a temporary corrupted display |
+| Power consumption | Baseline at the same timing and minimum brightness (setting 0) | About 0.18–0.19 W higher (+13–16%) |
+
+Mode tables, timing details, audio routing, and other implementation details are documented in
+[`xreal/air/docs/design.md`](xreal/air/docs/design.md) (Japanese only). Hardware
+results are in [`xreal/air/docs/verification.md`](xreal/air/docs/verification.md)
+(Japanese only).
+Automatic DP audio and HDMI-hotplug recovery are results from the tested
+converter, not a guarantee for every converter. On NVIDIA, sending a mode below
+the preferred resolution as a true wire signal also requires display scaling to
+be set to "none" for each EDID configuration.
+
+### XREAL Air 2 / Air 2 Pro
+
+| Area | Official firmware | This build |
+|---|---|---|
+| Native RGB | Non-RGB OLED path | Displays native 2D and Full-SBS in RGB |
+| Native resolution | `1920x1080` | Remains `1920x1080` because the physical panel is 1080p |
+| 720p | Not advertised in the EDID | Mode 1 advertises true `1280x720@60` and scales it to the full panel through the official YCbCr scaler path; fixed 72 / 90 / 120 Hz modes do not advertise it |
+| Full-SBS | `3840x1080` at 60 / 72 Hz; a 90 Hz mode is present but does not work correctly because the link bandwidth is insufficient | `3840x1080` at 60 / 72 / 90 Hz; 90 Hz also works correctly |
+| Audio without USB data | Manual switch or supported Adapter notification | After about five seconds, re-advertises an LPCM EDID and enters DP audio at the saved volume, with a blackout |
+| HDMI hotplug while the converter stays powered | Some converters fail to restore video | Recovery logic is added; on Air 2 Pro it restores video within several seconds after a temporary corrupted display |
+| Power consumption | Baseline at the same timing and minimum brightness (setting 0) | Air 2 measured about 0.17–0.18 W higher (about +14%); Air 2 Pro was not measured |
+
+The shared design is in [`xreal/air2/docs/design.md`](xreal/air2/docs/design.md)
+(Japanese only), and the hardware coverage is in
+[`xreal/air2/docs/verification.md`](xreal/air2/docs/verification.md) (Japanese
+only). Audio and hotplug compatibility is limited to the tested HDMI converter.
+Powered HDMI hotplug was tested end to end on Air 2 Pro, not Air 2.
+
+The power figures in both tables are whole-device USB input power with an identity
+signal (`1920x1080@90` for Air and `1920x1080@60` for Air 2), minimum brightness,
+and full-screen black or white. They are not measurements of an individual circuit.
+As a trade-off of this build, including native RGB, power consumption is higher
+than with the official firmware. Most of the additional input power ultimately
+becomes heat, so more heat generation is expected under the same conditions.
+Surface and internal temperature increases were not measured directly.
+
+### What native RGB looks like
+
+The official firmware names one panel path YCbCr, but its internal subsampling
+has not been established. This README calls it **non-RGB** without guessing the
+packing. This kit keeps native 2D and Full-SBS as RGB888 all the way to the OLED.
+
+| This build: native RGB | Official firmware: non-RGB |
 |---|---|
-| XREAL Air (gen 1) | **supported**, both the DP bridge and the MCU |
-| XREAL Air 2 | planned, 720p support first |
-| Rokid Max | planned. Likely host-side display-mode control rather than a firmware change (see below) |
-| xbx a01 family | planned |
+| ![Smooth native-RGB gradient](docs/assets/gradient-rgb.png) | ![Non-RGB gradient with diagonal scale-shaped contours](docs/assets/gradient-yuv.png) |
 
-What each model needs, and how it was verified, lives in that model's directory.
-Everything below describes the currently supported XREAL Air (gen 1).
-
-### About Rokid Max (planned)
-
-Rokid Max is a different situation. **Its EDID does not live in the MCU firmware
-but in the DP bridge (LT7911UX)**, whose firmware is neither published nor
-dumpable. The kind of EDID rewrite done for the XREAL Air is therefore not
-possible.
-
-What is possible is better: **the best display mode already exists in the
-hardware.** `3840x1200@90` (per eye `1920x1200@90`) can be selected over a USB
-control transfer, but the official SDK exposes only the two lowest modes and the
-button on the glasses cannot reach it either. That is the gap worth closing.
-
-The STM32 MCU can be both dumped and written over DFU, so firmware work remains
-possible there if it turns out to be needed. Note that obtaining the latest
-official MCU firmware requires a Rokid Station 2; the version bundled with the
-phone app is older.
+These are explanatory illustrations, not panel photographs. On shallow color
+gradients, the diagonal contour steps are reduced and the image looks smoother.
 
 ---
 
-## What you need — XREAL Air (gen 1)
+## Preparation before flashing
 
-| Component | File | SHA-256 |
-|---|---|---|
-| DP bridge | `1140` | `66A28C7BE1842D6837C68A5586CB0465099787F421427BE0CBE9691C858837DA` |
-| MCU | `07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` |
+### 1. Identify the model and official files
 
-These are the official Air (gen 1) images. The hashes are published so you can
-verify that whatever you obtained is the exact file this tooling expects — the
-builders refuse to run on anything else.
+The builders accept the official inputs below and produce fixed outputs. The
+hashes do not identify a download source; they only prove that your files match
+the reviewed baseline.
 
-### Python
+| Model | Component | Official file location | Official input SHA-256 | Output SHA-256 |
+|---|---|---|---|---|
+| Air (gen 1) | DP | `firmware/1140` | `66A28C7BE1842D6837C68A5586CB0465099787F421427BE0CBE9691C858837DA` | `34AEE893AC697D314CB522D135AAE8C9222CC9461B62C096C616FEF44DE87AD8` |
+| Air (gen 1) | MCU | `firmware/07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` | `F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D` |
+| Air 2 / Air 2 Pro | DP | `firmware/air2/1140` | `350BACE369A83823D8EF867AE04AD07CF64D724C10EC7CEECFB83861AC9672F3` | `46556947E81DD7EBBD7F26B2541B63E0362804C166C020639DA908D2ABB2F486` |
+| Air 2 / Air 2 Pro | MCU | `firmware/air2/09.1.00.180_20240507.bin` | `C07633E97215346468A18F5306A10F800388A80CCD7DCFE800D468F4AB1BFD49` | `950CA9535AFBD02C40D97A167DB06ECFAEEBC35F6ADCCDED81829CC44A8BE4C9` |
 
-Python 3.10+. **What you need to install depends on what you are doing.**
+Put the official files at those paths and keep another backup somewhere safe.
+`firmware/` is gitignored, so its contents cannot be committed to this repository.
 
-| Task | Requires |
-|---|---|
-| Building an image | **nothing** -- standard library only |
-| Reading the EDID or the Windows display signal | **nothing** -- it reads what the OS already knows |
-| Flashing, or reading registers | `hidapi` |
+### 2. Install Python and dependencies
+
+Use Python 3.10 or later. The builders use only the standard library. USB HID
+tools for flashing, display-mode control, VSYNC, and register diagnostics require
+`hidapi`.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Two different PyPI packages provide `import hid`. **The one you want is `hidapi`**,
-which ships a compiled binding. The other, named `hid`, is a ctypes wrapper that
-needs a system libhidapi installed separately. Installing both leads to confusing
-import errors.
+PyPI also has a different package that provides `import hid`. Install `hidapi`,
+which includes compiled bindings, and do not install both packages together.
 
-### Operating systems
+### 3. Check the operating system and USB connection
 
-**Verified on Windows.**
+Hardware flashing was verified on Windows. The pure-Python builders work on
+Linux and macOS. HID tools are expected to work there but have not been tested.
+Some display diagnostics are Windows-only.
 
-| Tool | Windows | Linux / macOS |
+| Operation | Windows | Linux / macOS |
 |---|---|---|
-| `xreal/air/build_dp.py` / `build_mcu.py` | works | **works** (pure Python) |
-| `xreal/dp_flash.py` / `mcu_flash.py` | works | should work, untested |
-| `xreal/display.py` / `dpreg.py` / `panelreg.py` / `vsync.py` | works | should work, untested |
-| `xreal/edid_dump.py` | works | **no** -- uses PowerShell and WMI |
-| `common/display_signal.py` | works | **no** -- uses the Windows display-config API |
+| Build DP / MCU images | Supported | Supported |
+| Flash DP / MCU images | Supported and hardware-verified | Untested |
+| HID display and register diagnostics | Supported | Untested |
+| EDID capture and Windows wire-signal inspection | Supported | Not supported |
 
-Building an image works anywhere. The tools that talk to the glasses use nothing
-but hidapi, so they ought to work on Linux and macOS, but that has not been
-checked here.
+`xreal/display.py --probe` invokes the Windows-only `edid_dump.py`, so that
+option does not work on Linux or macOS. Normal mode reads and changes remain
+untested HID operations there.
 
-`xreal/display.py --probe` calls `edid_dump.py` after switching, so that one
-combination needs Windows. Reading and setting the mode works on any OS.
+Connect only the target glasses directly to the PC before flashing. Disconnect
+other XREAL or Nreal HID devices. On Linux, run as root or grant `hidraw` access,
+for example:
 
-**On Linux you need permission to reach the HID device.** Run as root, or install
-a udev rule.
-
-```
+```text
 # /etc/udev/rules.d/70-xreal.rules
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3318", MODE="0666"
 ```
 
 ---
 
-## What it does — XREAL Air (gen 1)
+## What each script does
 
-Stock firmware advertises 1080p and nothing else. The panels are actually
-1920x1200, that geometry is never offered, sources limited to 720p get no
-matching timing, and sources that carry no USB data get no audio at all. This
-kit makes all four input paths work.
+### Build images
 
-| Input | Stock | With this build |
+| Script | Target | Writes hardware |
 |---|---|---|
-| `1280x720` | no matching timing | **VIC 4 advertised in the CTA.** The bridge scales it to full screen |
-| `1920x1080` | native | unchanged, 60 / 90 / 120 Hz |
-| `1920x1200` | never offered | **the preferred timing**, 60 / 90 / 120 Hz |
-| `3840x1200` Full-SBS | `3840x1080` | **3840x1200 @ 60 / 72 / 90 Hz** over HBR2 |
+| `xreal/air/build_dp.py` | Air (gen 1) DP image | No |
+| `xreal/air/build_mcu.py` | Air (gen 1) MCU image | No |
+| `xreal/air2/build_dp.py` | Shared Air 2 / Air 2 Pro DP image | No |
+| `xreal/air2/build_mcu.py` | Shared Air 2 / Air 2 Pro MCU image | No |
 
-Per logical mode:
+Each builder checks the official input SHA and container CRC, every patch site's
+before bytes, the resulting SHA and CRC, the DP bank tag, and the complete change
+range. Unexpected inputs or outputs are rejected. There is no `--force` option.
 
-| Logical mode | Stock | With this build |
-|---:|---|---|
-| 1 (auto) | `1080p60/90/120` | **`1200p60` preferred**, `1200p90`, `1200p120`, plus `1080p60/90/120` and `720p60` in the CTA block |
-| 5 / 10 / 11 (fixed refresh) | `1080p` only | **`1200p72/90/120` preferred**, same-refresh `1080p` alternate, no CTA leak |
-| 3 / 4 / 9 (Full-SBS 3D) | `3840x1080` | **`3840x1200` @ 60 / 72 / 90 Hz** over HBR2 |
+### Flash images
 
-Every 2D mode advertises 1920x1200 as the EDID preferred timing, so hosts that
-derive "native resolution" from the preferred timing — macOS in particular — pick
-1200p by default instead of never offering it at all.
+| Script | Purpose | When it writes |
+|---|---|---|
+| `xreal/dp_flash.py` | Inspect, flash, or restore the DP bridge | Only with `--flash` |
+| `xreal/mcu_flash.py` | Verify, flash, or restore the MCU | Only with `--flash` |
 
-The panel row count, the panel timing group, the DP link rate and the input
-classifier all follow the actual input signal automatically. Changing resolution
-or refresh rate on the host needs no action on the glasses.
+Both tools bind the connected USB PID and model to exact known-image hashes,
+validate the project code and container, and require the matching official
+recovery image. Air 2 and Air 2 Pro share a project code, but their USB PIDs are
+still checked separately. There is no bypass option.
 
-### Automatic DP audio
+### Inspect state
 
-**HDMI-to-USB-C converters and consoles carry no USB data.** USB audio is
-impossible, and there is nobody to press the button for a manual switch. On
-stock firmware, getting sound in that situation takes either a long-press by the
-user or a genuine Nreal Adapter asserting a dedicated bit.
+| Script | Purpose | Works on stock firmware |
+|---|---|---|
+| `common/display_signal.py` | Separates Windows desktop resolution from the active wire signal | Yes |
+| `xreal/edid_dump.py` | Captures and decodes the EDID received by the host | Yes |
+| `xreal/display.py` | Reads or changes Air-family logical display modes | Yes |
+| `xreal/vsync.py` | Measures panel VSYNC | Yes |
+| `xreal/dpreg.py` | Reads DP bridge registers | Requires this kit's MCU |
+| `xreal/panelreg.py` | Reads or writes panel registers | Requires this kit's MCU |
 
-The MCU in this build watches the USB `SET_ADDRESS` sticky word:
-
-- if the host ever addresses the device, it **stays on USB audio** for that power
-  session, so a directly connected PC never falls into DP audio by mistake
-- only if the address stays zero for roughly five seconds does it enter the stock
-  DP-audio transition
-- the genuine Nreal Adapter attention path fires immediately, as it does on stock
-- the saved volume level is restored on the transition, and the manual toggle is
-  locked for the rest of the power session
-
-Note that **entering DP audio closes the USB composite device — that is stock
-behaviour** — so HID control is unavailable while DP audio is active.
-
-**Known host-side caveat.** NVIDIA's driver GPU-scales any mode smaller than the
-display's native resolution. Now that native is 1200p, selecting 1080p may be
-stretched rather than sent as a true 1080p signal. Setting scaling to "none" in
-the NVIDIA control panel fixes it — but that setting is stored per EDID
-configuration, so it must be set once per logical mode you care about. If you run
-at 1200p, none of this affects you.
-
-XREAL's stock container carries EDID templates for several models and the
-header's project code selects one; the Air (gen 1) builder touches only the Air
-template and leaves the others byte-identical to stock.
+`display.py` toggles HPD during a mode change, causing a short blackout.
+`panelreg.py` writes panel RAM, so a full power cycle restores those values.
 
 ---
 
-## About the vendor's own apps
+## From build to flash
 
-**If you use Nebula on an XREAL Beam Pro, do not flash this. It stops working.**
+Always use a DP and MCU pair for the same model. Run these commands from the
+repository root.
 
-Apps that render into the glasses, Nebula among them, draw with a correction
-applied to cancel the lens distortion, and **that correction data exists only
-for 1080p.** At 1200p the rendering never comes together and the app does not
-get past its launch screen. This was confirmed on hardware.
+### 1. Generate patched images
 
-**There is no way around it.** The Beam Pro follows the EDID preferred timing,
-so you cannot drop it to 1080p from the host and carry on. Going back to stock
-is the only option.
-
-**Using the glasses as an external display is unaffected.** For anything that
-sends a plain image without optical correction -- an ordinary desktop, and the
-use this kit is built for -- 1200p is simply better.
-
-### Nothing reverts behind your back
-
-This build does not touch the container header, so the firmware version the
-glasses report stays as stock. Nebula and the Beam Pro do not see a device that
-needs updating and will not push firmware at it.
-
-### No app can talk to the glasses during DP audio
-
-The USB composite device closes, which is stock behaviour -- but this build
-enters DP audio automatically on sources that carry no USB data, so you meet it
-more often than on stock. Replugging clears it.
-
-### Going back to stock
-
-```bash
-python xreal/dp_flash.py  --restore --flash
-python xreal/mcu_flash.py --restore --flash
-```
-
-Both need the stock file present in `firmware/`.
-
----
-
-## Usage
-
-**The DP bridge and the MCU are a pair.** Flashing only one of them leaves the
-panels not following the input, or the audio not switching. Do both.
-
-Build both images from your own stock files:
+Air (gen 1):
 
 ```bash
 python xreal/air/build_dp.py  --src firmware/1140                     --out air-dp.bin
 python xreal/air/build_mcu.py --src firmware/07.1.02.387_20240428.bin --out air-mcu.bin
 ```
 
-The builders verify as they go, and any mismatch is a hard failure — there is no
-`--force`. Check without writing anything:
+Air 2 / Air 2 Pro:
+
+```bash
+python xreal/air2/build_dp.py  --src firmware/air2/1140                     --out air2-dp.bin
+python xreal/air2/build_mcu.py --src firmware/air2/09.1.00.180_20240507.bin --out air2-mcu.bin
+```
+
+Use `--check-only` to build and validate in memory without writing a file.
 
 ```bash
 python xreal/air/build_dp.py --src firmware/1140 --check-only
 ```
 
-The builders produce a fixed output. If your SHA-256 matches the table below,
-what you built is byte-identical to what was verified here.
+Use `--verify` to prove that an existing file is byte-identical to the
+deterministic output.
 
-| Image | SHA-256 |
-|---|---|
-| DP | `D5D34FB0ED0AB49B92D793CCF8384E61B1C1274AAC45293911F3CAF325BDC793` |
-| MCU | `3842A4232356B993CFDE839B3D772EB861FC382B0506EF2098E1352F100A77FE` |
+```bash
+python xreal/air/build_dp.py --src firmware/1140 --verify air-dp.bin
+```
 
-Then flash. **This is the irreversible part.**
+### 2. Inspect the images before flashing
+
+Running the DP tool without arguments only identifies the connected model and
+reads the running DP version. It writes nothing.
+
+```bash
+python xreal/dp_flash.py
+```
+
+You can inspect generated images without `--flash`:
+
+```bash
+python xreal/dp_flash.py  --image air-dp.bin
+python xreal/mcu_flash.py --image air-mcu.bin --verify-only
+```
+
+For Air 2 or Air 2 Pro, substitute `air2-dp.bin` and `air2-mcu.bin`. Do not
+continue unless the reported model, SHA, CRC, and DP bank tag match the
+preparation table.
+
+### 3. Flash in the model-specific order
+
+#### Air (gen 1): DP, then MCU
 
 ```bash
 python xreal/dp_flash.py  --image air-dp.bin  --flash
 python xreal/mcu_flash.py --image air-mcu.bin --flash
 ```
 
-The DP bridge restarts itself after FINISH, so no replug is needed. The MCU
-returns to its application through the bootloader.
+#### Air 2 / Air 2 Pro: MCU, then DP
 
-Running `xreal/dp_flash.py` with no arguments is safe: it identifies the
-connected glasses and prints the running firmware version without writing
-anything. Do that first.
+```bash
+python xreal/mcu_flash.py --image air2-mcu.bin --flash
+python xreal/dp_flash.py  --image air2-dp.bin  --flash
+```
+
+Only calls carrying `--flash` send an update. Do not disconnect the cable or let
+the PC sleep during transfer. The DP bridge restarts itself after FINISH, and
+the MCU returns to its application through the bootloader, so a successful
+write does not require a replug.
+
+### 4. Check the result
+
+Run `python xreal/dp_flash.py` again. The DP version should be `1140`. Version
+`1109` means the bridge entered its fallback image; see
+[If something goes wrong](#if-something-goes-wrong).
+
+Test the resolutions, refresh rates, Full-SBS modes, and audio route you plan to
+use. Use the diagnostic scripts above to record the active signal or EDID. The
+container version string remains the official one, so track the modified state
+with the generated SHA and your own records.
 
 ---
 
-## Why you can trust the build
+## Restoring official firmware
 
-The builder does not just apply a patch. It proves the result:
+The official files you saved must be at the paths in the preparation table.
+Connect only the target glasses, then restore the MCU first and the DP bridge
+second:
 
-- the stock input must match the expected SHA-256, project code and container CRC
-- the change set is a table of explicit before/after records, each labelled — you
-  can audit it by diffing the two images yourself
-- every record's "before" bytes must match before it is applied
-- the build is deterministic, and the output SHA-256, container CRC, bank0 commit
-  tag and changed-byte count are all pinned
-- the resulting EDID is decoded and checked against the advertised contract for
-  every logical mode
-- the firmware's own 8051 post-build helper is executed in a small emulator over
-  every possible state vector, to prove which EDID timing slots each mode writes
+```bash
+python xreal/mcu_flash.py --restore --flash
+python xreal/dp_flash.py  --restore --flash
+```
 
-Design notes and the full hardware acceptance record live in `xreal/air/docs/`.
-Those two are **Japanese only**; the protocol and container references under
-`docs/` are available in both languages.
+Recovery images are checked against the connected PID and the same fixed-hash
+policy used for normal updates.
+
+---
+
+## About the vendor's own apps
+
+**If you use an Air (gen 1) with Nebula on an XREAL Beam Pro, do not flash the
+Air build. It stops working.**
+
+Apps such as Nebula render with a correction that cancels lens distortion. The
+required correction data exists only for 1080p. The Air build makes 1200p the
+preferred timing, so Beam Pro Nebula cannot proceed past its startup screen.
+This is hardware-verified, and restoring official firmware is the only remedy.
+Normal use as an uncorrected external display is unaffected.
+
+The build does not change the container version, so Nebula or Beam Pro will not
+silently restore official firmware either.
+
+Air 2 / Air 2 Pro keep `1920x1080` as the preferred timing, and both have been
+hardware-tested for normal operation with XREAL Beam Pro.
+
+On HDMI converter paths with no USB data, the full automatic DP-audio transition
+closes the USB composite device. That connection did not have a USB data path in
+the first place, so HID control is unavailable until the glasses are reconnected
+to a USB-capable host.
+
+---
+
+## How the generated result is verified
+
+The builders do more than apply patches. Every run verifies:
+
+- the official input SHA-256, project code, and container CRC;
+- every labelled change record's before bytes and allowed range;
+- the deterministic output SHA-256, container CRC, DP bank0 tag, and changed-byte count;
+- generated EDID checksums, DTDs, VICs, and per-mode advertisement contracts;
+- all Air DP 8051 helper state vectors;
+- the Air 2-family DP EDID and RGB-profile contracts; and
+- the MCU display and recovery policy models.
+
+Detailed hardware results live in each model's `docs/verification.md`.
+See [the container format](docs/container-format.en.md) and
+[the HID protocol](docs/hid-protocol.en.md) for the shared technical details.
 
 ---
 
 ## If something goes wrong
 
-These are the failure modes that have actually been observed, and how they were
-recovered.
+**You selected an image for another model.** The flasher refuses to send unless
+the USB PID and fixed image SHA are an approved pair. Do not bypass the check;
+verify the connected model and filename.
 
-**Wrong project code.** The container header carries a project code that selects
-the model. Writing an image built for another model can destroy the glasses. Both
-the builder and the flasher refuse on mismatch. Do not defeat this.
+**The DP bridge starts its fallback image.** Symptoms are DP version `1109`,
+monitor name `nreal air`, a fixed 60 Hz mode, and dead mode switching. The bank0
+image was rejected, but this is recoverable. Flash the correct DP output again,
+or restore the official DP image with `--restore`.
 
-**DP bridge boots the fallback image.** If the bank0 commit tag does not match,
-the bridge rejects bank0 and falls back to an internal image. Symptoms: reported
-version `1109`, monitor name `nreal air`, stuck at 60 Hz, mode switching dead.
-**This is recoverable** — reflash a good image with the same tool.
+**The MCU application does not start.** If USB repeatedly connects and
+disconnects, hold the button while connecting USB to enter the bootloader, then
+restore the saved official MCU with `--restore --flash`.
 
-**MCU will not start.** A bad MCU image can leave the application unable to boot;
-the device enumerates and disconnects in a loop. Hold the button while connecting
-USB to enter the bootloader (PID `0x0423`), then write the stock MCU image back in
-full. This has been done successfully and the device recovered completely.
-
-**A transfer aborted or FINISH returned a bad status.** Unplug and replug to reset
-before retrying. A normal successful write needs no replug; the bridge restarts
-itself.
+**Transfer stopped or FINISH returned an error.** Do not retry in the same power
+state. Disconnect and reconnect once to reset the MCU, then retry. A normally
+completed write does not need a replug.
 
 ---
 
-## Layout
+## Repository layout
 
+```text
+xreal/          XREAL Air-family HID, flashing, and diagnostic tools
+  air/          Air (gen 1) builders and design/verification documents
+  air2/         Shared Air 2 / Air 2 Pro builders and documents
+common/         Model-independent display diagnostics
+docs/           Container format, HID protocol, and common references
+firmware/       Your official input files; gitignored
 ```
-xreal/          XREAL-common: HID protocol, flashing, diagnostics
-  air/          Air (gen 1) builders and design/acceptance docs
-common/         vendor-neutral tools
-docs/           container format, protocol notes, shared background
-firmware/       where you put the stock files you obtained (gitignored)
-```
 
-**What lives under `xreal/` targets the Air family.** It is verified on the Air
-(gen 1), and the Air 2 and Air 2 Pro speak the same USB HID protocol
-(VID `0x3318`).
-
-**Sharing a VID does not mean the tools apply.**
-
-| Device | Tools under `xreal/` |
-|---|---|
-| Air (gen 1) | verified |
-| Air 2 / Air 2 Pro | same protocol, not verified here |
-| XREAL One / One Pro / 1S | **do not work.** A different protocol built on 16-bit ops |
-| xbx a01+ (x by XREAL) | same protocol family, with differences in detail; unverified |
-
-Rokid is further away still, using USB control transfers and DFU, and will get
-its own `rokid/` directory.
-
-`common/` holds only things that know nothing about any device. Right now that
-is one tool, which reports whether Windows is sending the desktop resolution to
-the wire or scaling it.
-
-The flashers check the model identifier in the container header, so an image
-built for one model cannot be written to another by mistake.
-
-### Diagnostics
-
-None of these write firmware. What they need differs, though:
-
-| Tool | Works on stock firmware | What it does |
-|---|---|---|
-| `common/display_signal.py` | yes, any display | desktop mode vs the signal on the wire |
-| `xreal/edid_dump.py` | yes | decode the EDID the host received, diff snapshots |
-| `xreal/display.py` | yes | read and switch the logical display mode |
-| `xreal/vsync.py` | yes | measure the panel VSYNC rate |
-| `xreal/dpreg.py` | **no** | read DP bridge registers |
-| `xreal/panelreg.py` | **no** | read and write panel registers |
-
-`dpreg.py` and `panelreg.py` need the MCU image built by this kit, which adds a
-register peek that stock firmware does not have. Against stock firmware the
-first times out and the second reads `0x23` everywhere; both say so rather than
-reporting nonsense.
-
-Two of them are not purely passive. `display.py` toggles HPD when it switches,
-so the screen drops for a few seconds -- the mode itself is volatile and a
-replug restores the default. `panelreg.py` can write, but panel registers live
-in RAM, so a power cycle undoes anything done there.
+Models not listed above are unsupported. Do not write an Air-family image to a
+different product just because it uses the same USB vendor id.
 
 ---
 
 ## License
 
-The code and documentation in this repository are licensed under [LICENSE](LICENSE).
+Repository code and documentation are licensed under the
+[Apache License 2.0](LICENSE).
 
-**This license does not extend to the vendor firmware the tooling operates on.**
-That firmware is the property of its owner, is not included here in any form, and
-its licensing is between you and the vendor.
+That license does not cover vendor firmware processed by these tools. The
+firmware remains the property of its rights holder and is not included here in
+any form.
 
 ---
 
 ## Contributing
 
-Bug reports and hardware test results are welcome, especially from devices,
-operating systems or host setups that have not been tested here -- and
-especially when you measure something different from the tables in
-`xreal/air/docs/verification.md`.
+Bug reports and hardware results from supported models are welcome, especially
+from untested operating systems or hosts and whenever observed values differ
+from a model's `docs/verification.md`.
 
-**Do not post firmware binaries, download links, or requests for either.** Such
+**Do not post firmware binaries, download links, or requests for them.** Such
 issues and comments will be removed without discussion.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.

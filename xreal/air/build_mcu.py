@@ -2,8 +2,8 @@
 """Build the XREAL Air (gen 1) MCU image that pairs with the DP build.
 
 WHAT THIS DOES
-    Takes the official Air (gen 1) MCU container and applies 21 byte-level
-    records.  Two features, both needed by the DP build:
+    Takes the official Air (gen 1) MCU container and applies guarded byte-level
+    records.  The main features are:
 
     Panel follow.  The MCU drives the Sony micro-OLED panels, so it has to track
     the DP bridge: when the incoming signal is 1920x1200 the panels must be
@@ -11,18 +11,33 @@ WHAT THIS DOES
     refresh rate (60/72 Hz, 90 Hz and 120 Hz each need a different group).
     Without this the DP build alone produces a wrong or broken picture.
 
+    Automatic RGB/scaler link.  The paired DP publishes a complemented timing
+    tag.  Native 1080p/1200p at 60/72/90/120 Hz and Full-SBS at 60/72/90 Hz
+    use the 58/03 four-lane RGB panel link.  True 720p alone keeps the official
+    D9/04 scaler/YUV link and uses panel group 2; native 60 Hz remains on group
+    1.  Unknown, torn or stale states hold the current link.
+    In adaptive mode, native input keeps external C0=0 while the panel remains
+    RGB, avoiding a second cold retraining.  Fixed-rate and Full-SBS modes keep
+    their existing C0=2 policy.
+
     Automatic DP audio.  Stock firmware only leaves USB audio, unless the user
     long-presses to switch manually or a genuine Nreal Adapter asserts the
-    attention bit.  That is a problem for HDMI-to-USB-C converters and consoles,
-    which carry no USB data at all: no USB audio is possible and there is nobody
-    to press the button.  This build watches the USB SET_ADDRESS sticky word --
-    if the host ever addresses the device it stays on USB audio for that power
-    session, and only if the address stays zero for roughly five seconds does it
-    enter the stock DP-audio transition.  It also restores the saved volume and
-    locks the manual toggle for the rest of the session.
+    attention bit.  The tested HDMI-to-USB-C converter path carries no USB data,
+    so USB audio is impossible and there is nobody to press the button.  This
+    build watches the USB SET_ADDRESS sticky word: if a host addresses the
+    device during the initial wait state, the automatic path leaves USB audio
+    active for that power session.  Only while the stock audio state remains at
+    that wait state and the address stays zero for roughly five seconds does it
+    take the full DP-audio transition.  It selects the LPCM-capable EDID, asks
+    the source to re-read it through B6/HPD, repeats B6 after a guarded delay,
+    restores the saved gain, then opens the DP-I2S/SmartPA route.  The roughly
+    five-second no-USB grace period is followed by a visible re-enumeration
+    blackout; directly connected USB hosts stay on USB audio.
 
-    Note that entering DP audio closes the USB composite device -- that is stock
-    behaviour -- so HID control is unavailable while DP audio is active.
+    Powered HDMI-converter hotplug recovery.  A measured connected-but-broken
+    DP tuple is required for 75 consecutive observations before B6 is toggled
+    once.  The action latches until the tuple changes, so a normal or transient
+    state cannot cause repeated retraining.
 
 WHAT THIS DOES NOT DO
     It does not download, embed, or redistribute any vendor firmware, and it
@@ -66,9 +81,10 @@ VA_BIAS = 0xEFE8           # VA = file offset + VA_BIAS
 SIZE = 153_888
 STOCK_SHA256 = "B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7"
 STOCK_CRC = 0x413F76A3
-OUTPUT_SHA256 = "3842A4232356B993CFDE839B3D772EB861FC382B0506EF2098E1352F100A77FE"
-OUTPUT_CRC = 0xE7B4FA4C
-EXPECTED_DIFFS = 696       # bytes that actually change, including the header CRC
+OUTPUT_SHA256 = "F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D"
+OUTPUT_CRC = 0x511524B3
+PAIRED_DP_SHA256 = "34AEE893AC697D314CB522D135AAE8C9222CC9461B62C096C616FEF44DE87AD8"
+EXPECTED_DIFFS = 1543      # bytes that actually change, including the header CRC
 
 EXPECT_NAME = "Air.BootV_0.0.1"
 EXPECT_LENGTH = 0x25918
@@ -135,7 +151,6 @@ def validate_container(d: bytes, what: str) -> None:
 #                           timing groups; mode 9 needed the 90 Hz group
 #   mode 10 cold recovery   re-converge after a cold start or DP reset
 #   DP audio / volume       routing, local volume and session lock behaviour
-#                           carried over from the same research line
 #
 # Every record is a verbatim before/after pair, so the whole change set can be
 # audited by diffing this table against the two images.
@@ -225,6 +240,78 @@ RECORDS: tuple[Record, ...] = (
      0x016C08,
      bytes.fromhex("f0b5044600200ae011f8016b054d2b685d1c044f3d60044d2d68ee54401c9042f2d3f0bd"),
      bytes.fromhex("10b53f20f8f726fca84206d14520f8f721fcb04201d1304610bd002010bd00bf00bf00bf")),
+    ("first-eye automatic RGB/scaler policy hook",
+     0x004F72,
+     bytes.fromhex("05f031fe"),
+     bytes.fromhex("19f041fc")),
+    ("periodic automatic RGB/scaler monitor hook",
+     0x00B39C,
+     bytes.fromhex("00bf00bf"),
+     bytes.fromhex("13f024f9")),
+    ("checked DP reader call site",
+     0x00F59A,
+     bytes.fromhex("2046"),
+     bytes.fromhex("0020")),
+    ("checked DP reader and both-eye link writers",
+     0x01065C,
+     bytes.fromhex("2de9f84304460d464ff001080027002000900220faf794f90646012269464ff4df60f5f7a9fc9df80000aa2806d023202070012028804ff0000813e09df80000aa280fd10222314640f2f960f5f794fc37883a46"),
+     bytes.fromhex("70b504460d462078a62820d1607852281dd1a07847281ad1e678ff2e11d0002e01d0022e13d1d921022e00d15821032000f06df80421022e00d10321042000f066f8a620207001202880002070bd0020288070bd")),
+    ("automatic policy support helpers",
+     0x01E598,
+     bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+     bytes.fromhex("70b584b004460d4600260396012d01d0022d17d1e021ff20e7f7e4fa002811d14ff47a70012103aa0b46009201950290224643210548e9f7dbfc002802d10398012101e00020002104b070bd00100840")),
+    ("automatic RGB/scaler policy",
+     0x01E5E8,
+      bytes(568),
+     bytes.fromhex("f8b5012802d0022800d0ffe000900026864f8e200221fff7cbff012900d0c1e0044686200221fff7c3ff012900d0b9e005468e200221fff7bbff012900d0b1e0a04200d0aee0e0b2210a4840ff2800d0a8e0e0b22a0a01460f231940914200d0a0e0032a00d99de07979914200d099e00146f0231940a02904d0b0292cd0c0293dd08fe0e8b2002800d08be03879002800d087e066494878012817d0b97a002900d07fe02a0a012a04d0022a06d0032a08d077e0052800d074e00be00a2800d070e007e00b2800d06ce003e0b97a022900d067e0022666e0e8b2012800d061e03879002800d05de0b87a022800d059e04f494878012800d054e0002653e0e8b2022800d04ee03879002802d001282ad048e0e8b2022800d044e03879002800d040e043494878012817d0b97a002900d038e02a0a012a04d0022a06d0032a08d030e0052800d02de00be00a2800d029e007e00b2800d025e003e0b97a022900d020e002261fe03879012800d01ae0b87a002800d016e02e4948782a0a002a04d0012a06d0022a08d00ce0032800d009e006e0042800d005e002e0092800d001e0022600e032e0c0200121fff701ff012900d014e0f97ab14200d010e0b04200d00de0009b012b0dd00420f0f753fe022e02d004281ad005e0032817d002e0fe7200f020f882200021f1f7cbff022e01d0d92100e058210320f1f7c3ff022e01d0042100e003210420f1f7bbfff8bd00bf10b5ecf7edf904460220fff7f1fe204610bd00bf70b5034de5f7e9fc360300208a13002094030020")),
+    ("automatic no-USB entry -> full DP-audio transition",
+     0x00351E,
+     bytes.fromhex("0df05ab9"),
+     bytes.fromhex("07f049fc")),
+    ("manual/adapter entry -> deferred full DP-audio transition",
+     0x00355E,
+     bytes.fromhex("0df0c9f8"),
+     bytes.fromhex("0df03af9")),
+    ("full DP-audio second-B6, saved-gain/deferred-route and manual recovery helpers",
+     0x01065C,
+     bytes.fromhex("70b504460d462078a62820d1607852281dd1a07847281ad1e678ff2e11d0002e01d0022e13d1d921022e00d15821032000f06df80421022e00d10321042000f066f8a620207001202880002070bd0020288070bd214640f2fb60f5f78dfc2f804ff000083046faf717f94046bde8f883c6e700bf10b513480078a7280bd11248c08801f0d1fa082010490a7802430a70ae390120087010bd10b5f5f779fa09480078a7280cd10848c078c12808d108480849097830f811000349c88001f0b4fa10bd00bf040200208a130020e6120020bc120020dc12002000bf00bf00bf00bf70b504460d462078a5280dd16178a078002902d0f9f768f801e0fef781fe207001202880002070bd0020288070bd70b504460d462a4621460120fbf712fb2a4621460020fbf70dfb70bd10b5faf760fce01e012801d9092c0cd100213f20fff7e6ffd4214520fff7e2ff10bd00bf00bf56e700bf012c05d0052c03d00a2c01d00b2c01d1fef7d2fe10bd10b504f040f9fef7ccfe10bd00bf00bf0d490878a62811d1a720087000200a49086001200a4908700a490a78082002430a70ae3901200870f2f7aebefaf7d7faf2f790be00bf040200209403002032120020e6120020"),
+     bytes.fromhex("70b504460d462078a62823d1607852281dd1a07847281ad1e678ff2e11d0002e01d0022e13d1d921022e00d15821032000f06df80421022e00d10321042000f066f8a620207001202880002070bd0020288070bd2078b628f9d16078a528f6d11549c87901214840f4f7d4fee9e700bfc6e700bf10b50f4c2078a62818d1a72020704ff47a7006f046fd0b49c87901214840f4f7bffe4ff47a7006f03cfd0748c08801f0c1fa082005490a78024309e010bd00bf04020020360300208a130020e61200200a70ae390120087010bd2f804ff000083046faf7dff84046bde8f88370b504460d462078a5280dd16178a078002902d0f9f768f801e0fef781fe207001202880002070bd0020288070bd70b504460d462a4621460120fbf712fb2a4621460020fbf70dfb70bd10b5faf760fce01e012801d9092c0cd100213f20fff7e6ffd4214520fff7e2ff10bd00bf00bf56e700bf012c05d0052c03d00a2c01d00b2c01d1fef7d2fe10bd10b504f040f9fef7ccfe10bd00bf00bf10b50b480078a62810d14ff47a7006f0c5fc08480949097830f811000849c88001f03dfa0648c08801f041faf5f7f3f910bd04020020bc120020dc1200208a13002000bf00bf")),
+    ("adaptive-mode external-C0 separation hook",
+     0x01E78E,
+     bytes.fromhex("c0200121"),
+     bytes.fromhex("00f047b8")),
+    ("external-C0 shadow comparison uses separated expectation",
+     0x01E79E,
+     bytes.fromhex("b142"),
+     bytes.fromhex("a142")),
+    ("external-C0 actual comparison uses separated expectation",
+     0x01E7A4,
+     bytes.fromhex("b042"),
+     bytes.fromhex("a042")),
+    ("external-C0 recovery stores separated expectation",
+     0x01E7C6,
+     bytes.fromhex("fe72"),
+     bytes.fromhex("fc72")),
+    ("periodic gate -> latched powered-hotplug recovery",
+     0x01E7FA,
+     bytes.fromhex("ecf7edf9"),
+     bytes.fromhex("00f01ff8")),
+    ("adaptive-mode external-C0 separation helper",
+     0x01E820,
+     bytes(28),
+     bytes.fromhex("344605484078012800d10024c0200121fff7b2fefff7afbf8a130020")),
+    ("latched exact-tuple powered-hotplug recovery helper",
+     0x01E83C,
+     bytes(192),
+     bytes.fromhex("10b5194ce6f75bfe002828d18820e6f7f9fd052823d18920e6f7f4fd00281ed19020e6f7effd0b2819d18e20e6f7eafd002814d18f20e6f7e5fd00280fd12078ff280ed0013020704b280ad1ff2020700649c87901214840e6f7ecfd01e000202070ecf79bf910bd3a1200203603002000bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf00bf")),
+    ("true-720 accepted branch -> panel-group-2 helper",
+     0x01E6E2,
+     bytes.fromhex("002653e0"),
+     bytes.fromhex("00f0efb8")),
+    ("true-720-only cache-aware panel-group-2 helper",
+     0x01E8C4,
+     bytes.fromhex("00bf00bf00bf00bf00bf00bf"),
+     bytes.fromhex("0220f7f7e7fe0026fff75fbf")),
 )
 
 RECORD_BYTES = sum(len(old) for _l, _o, old, _n in RECORDS)
@@ -234,10 +321,153 @@ def build(stock: bytes) -> bytes:
     out = bytearray(stock)
     for label, offset, old, new in RECORDS:
         if out[offset:offset + len(old)] != old:
-            fail(f"stock image does not match record at 0x{offset:06X}: {label}")
+            fail(f"record precondition does not match at 0x{offset:06X}: {label}")
         out[offset:offset + len(new)] = new
     fix_container_crc(out)
     return bytes(out)
+
+
+def classify_panel_link(
+    tag_pair: int,
+    raw_pair: int,
+    *,
+    b9: int,
+    bf: int,
+    shadow_refresh: int,
+    mode: int,
+    reads_ok: bool = True,
+) -> tuple[bool, int | None]:
+    """Model the policy as (valid, desired C0); invalid states hold the link."""
+    tag = tag_pair & 0xFF
+    complement = tag_pair >> 8
+    raw_class = raw_pair & 0xFF
+    refresh = raw_pair >> 8
+    if not (
+        reads_ok
+        and tag ^ complement == 0xFF
+        and refresh in range(4)
+        and shadow_refresh == refresh
+        and tag & 0x0F == refresh
+    ):
+        return False, None
+    family = tag & 0xF0
+    adaptive_2d = mode == 1 and bf == 2
+    fixed_2d = bf == 0 and mode == {1: 5, 2: 10, 3: 11}.get(refresh)
+    if family == 0xA0 and raw_class == 0 and b9 == 0 and (adaptive_2d or fixed_2d):
+        return True, 2
+    if family == 0xB0 and raw_class == 1 and b9 == 0 and adaptive_2d:
+        return True, 0
+    if family == 0xC0 and raw_class == 2 and b9 == 0 and (adaptive_2d or fixed_2d):
+        return True, 2
+    if (
+        family == 0xC0
+        and raw_class == 2
+        and b9 == 1
+        and bf == 0
+        and mode == {0: 3, 1: 4, 2: 9}.get(refresh)
+    ):
+        return True, 2
+    return False, None
+
+
+def verify_panel_link_policy() -> int:
+    accepted: set[tuple[str, int]] = set()
+    for label, family, raw_class in (("1080p", 0xA0, 0), ("720p", 0xB0, 1), ("1200p", 0xC0, 2)):
+        for refresh in range(4):
+            tag = family | refresh
+            got = classify_panel_link(
+                tag | ((tag ^ 0xFF) << 8), raw_class | (refresh << 8),
+                b9=0, bf=2, shadow_refresh=refresh, mode=1,
+            )
+            if got != (True, 0 if family == 0xB0 else 2):
+                fail(f"{label} refresh {refresh} panel-link policy mismatch")
+            accepted.add((label, refresh))
+    for label, family, raw_class in (("1080p-fixed", 0xA0, 0), ("1200p-fixed", 0xC0, 2)):
+        for refresh, mode in ((1, 5), (2, 10), (3, 11)):
+            tag = family | refresh
+            if classify_panel_link(
+                tag | ((tag ^ 0xFF) << 8), raw_class | (refresh << 8),
+                b9=0, bf=0, shadow_refresh=refresh, mode=mode,
+            ) != (True, 2):
+                fail(f"{label} refresh {refresh} panel-link policy mismatch")
+            accepted.add((label, refresh))
+    for refresh, mode in ((0, 3), (1, 4), (2, 9)):
+        tag = 0xC0 | refresh
+        if classify_panel_link(
+            tag | ((tag ^ 0xFF) << 8), 2 | (refresh << 8),
+            b9=1, bf=0, shadow_refresh=refresh, mode=mode,
+        ) != (True, 2):
+            fail(f"Full-SBS refresh {refresh} panel-link policy mismatch")
+        accepted.add(("SBS", refresh))
+    if len(accepted) != 21:
+        fail(f"panel-link policy accepts {len(accepted)} canonical cells, expected 21")
+    if classify_panel_link(0x5FA1, 0x0100, b9=0, bf=2, shadow_refresh=1, mode=1) != (False, None):
+        fail("corrupt timing tag did not hold the current link")
+    return len(accepted)
+
+
+def expected_external_c0(mode: int, panel_link: int) -> int:
+    """Adaptive mode keeps external C0=0 while the panel link follows input."""
+    return 0 if mode == 1 else panel_link
+
+
+HOTPLUG_MATCH_COUNT = 75
+HOTPLUG_LATCHED = 0xFF
+BROKEN_HOTPLUG_TUPLE = (0x00, 0x05, 0x00, 0x0B, 0x00, 0x00)
+
+
+def is_broken_hotplug_tuple(values: tuple[int, int, int, int, int, int]) -> bool:
+    return values == BROKEN_HOTPLUG_TUPLE
+
+
+def hotplug_recovery_step(counter: int, broken: bool) -> tuple[int, bool]:
+    """Model one observation as (new counter/latch, toggle B6 once)."""
+    if not broken:
+        return 0, False
+    if counter == HOTPLUG_LATCHED:
+        return HOTPLUG_LATCHED, False
+    counter = (counter + 1) & 0xFF
+    if counter == HOTPLUG_MATCH_COUNT:
+        return HOTPLUG_LATCHED, True
+    return counter, False
+
+
+def route_panel_group(input_class: int, refresh_class: int, normal_group: int) -> int:
+    """Override only the accepted true-720p60 route with panel group 2."""
+    return 2 if (input_class, refresh_class) == (1, 0) else normal_group
+
+
+def verify_release_policies(image: bytes) -> None:
+    for mode, panel_link, wanted in ((1, 2, 0), (1, 0, 0), (10, 2, 2), (9, 2, 2)):
+        if expected_external_c0(mode, panel_link) != wanted:
+            fail(f"external-C0 separation model failed for mode {mode}, link {panel_link}")
+
+    if not is_broken_hotplug_tuple(BROKEN_HOTPLUG_TUPLE):
+        fail("powered-hotplug broken tuple model changed")
+    if is_broken_hotplug_tuple((0, 5, 0, 11, 0, 1)):
+        fail("powered-hotplug tuple accepted a nonzero complement byte")
+
+    counter = 0
+    for _ in range(HOTPLUG_MATCH_COUNT - 1):
+        counter, toggle = hotplug_recovery_step(counter, True)
+        if toggle:
+            fail("powered-hotplug recovery toggled B6 before its threshold")
+    counter, toggle = hotplug_recovery_step(counter, True)
+    if (counter, toggle) != (HOTPLUG_LATCHED, True):
+        fail("powered-hotplug recovery did not latch and toggle at its threshold")
+    if hotplug_recovery_step(counter, True) != (HOTPLUG_LATCHED, False):
+        fail("powered-hotplug recovery retriggered while latched")
+    if hotplug_recovery_step(counter, False) != (0, False):
+        fail("powered-hotplug latch did not clear after tuple recovery")
+
+    if route_panel_group(1, 0, 1) != 2:
+        fail("true-720p60 no longer selects panel group 2")
+    if route_panel_group(2, 0, 1) != 1 or route_panel_group(0, 0, 1) != 1:
+        fail("native 60-Hz input no longer retains panel group 1")
+    if image[0x01E6E2:0x01E6E6] != bytes.fromhex("00f0efb8"):
+        fail("true-720 panel-group hook changed")
+    if image[0x01E8C4:0x01E8D0] != bytes.fromhex("0220f7f7e7fe0026fff75fbf"):
+        fail("true-720 panel-group helper changed")
 
 
 def verify_stock(stock: bytes) -> None:
@@ -248,9 +478,11 @@ def verify_stock(stock: bytes) -> None:
              f"       got             {sha256(stock)}")
     if head(stock)["stored_crc"] != STOCK_CRC:
         fail(f"stock container CRC is 0x{head(stock)['stored_crc']:08X}, expected 0x{STOCK_CRC:08X}")
-    for label, offset, old, _new in RECORDS:
-        if stock[offset:offset + len(old)] != old:
-            fail(f"stock guard mismatch at 0x{offset:06X}: {label}")
+    probe = bytearray(stock)
+    for label, offset, old, new in RECORDS:
+        if probe[offset:offset + len(old)] != old:
+            fail(f"record guard mismatch at 0x{offset:06X}: {label}")
+        probe[offset:offset + len(new)] = new
 
 
 def verify_output(stock: bytes, image: bytes) -> None:
@@ -268,6 +500,9 @@ def verify_output(stock: bytes, image: bytes) -> None:
     if len(diffs) != EXPECTED_DIFFS:
         fail(f"changed-byte count is {len(diffs)}, expected {EXPECTED_DIFFS}")
 
+    policy_cells = verify_panel_link_policy()
+    verify_release_policies(image)
+
     h = head(image)
     if sha256(image) != OUTPUT_SHA256:
         fail(f"output SHA-256 mismatch: {sha256(image)}")
@@ -279,11 +514,16 @@ def verify_output(stock: bytes, image: bytes) -> None:
     print(f"  records applied : {len(RECORDS)} ({RECORD_BYTES} bytes)")
     print(f"  changed bytes   : {len(diffs)} (records + header CRC)")
     print("  panel rows      : follows the input class, 1080 <-> 1200")
-    print("  panel groups    : 60/72 Hz, 90 Hz and 120 Hz, mode 9 included")
-    print("  DP audio        : automatic when the host carries no USB data (~5 s)")
+    print("  panel groups    : native 60/72, 90, 120; true 720p uses group 2 only")
+    print("  native/SBS panel: 58/03 four-lane RGB; adaptive mode keeps external C0=0")
+    print("  true 720p panel : official D9/04 scaler/YUV; external C0=0")
+    print(f"  link policy     : {policy_cells} canonical cells; transients hold current link")
+    print("  DP audio        : full EDID/B6 transition after ~5 s without USB data")
     print("  volume          : saved level restored on the audio transition")
+    print(f"  HDMI hotplug    : exact broken tuple x {HOTPLUG_MATCH_COUNT}; one latched B6 toggle")
     print(f"  container CRC   : 0x{h['stored_crc']:08X}")
     print(f"  sha256          : {sha256(image)}")
+    print(f"  paired DP       : {PAIRED_DP_SHA256}")
 
 
 def main() -> None:

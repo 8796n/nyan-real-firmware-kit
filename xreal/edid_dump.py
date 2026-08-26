@@ -325,10 +325,10 @@ def main():
         if mfg(b)[0] == "MRG" and struct.unpack_from("<H", b, 10)[0] == 0x3132:
             check_predictions(b, ndtd)
             compare_rom(b)
-            if tag and active:
-                p = os.path.join(SCRATCH, "edid_%s.bin" % tag)
-                open(p, "wb").write(b)
-                print("  saved: %s" % p)
+        if tag and active:
+            p = os.path.join(SCRATCH, "edid_%s.bin" % tag)
+            open(p, "wb").write(b)
+            print("  saved: %s" % p)
         print()
     others = len(eds) - shown
     if others and "--all" not in argv:

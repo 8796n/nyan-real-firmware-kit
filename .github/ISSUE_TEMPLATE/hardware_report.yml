@@ -1,5 +1,5 @@
 name: 実機検証の報告 / Hardware test result
-description: 未検証の機種・OS・ホスト環境での結果、または記録と違う測定値 / Results on an untested device, OS or host, or measurements that differ from the recorded ones
+description: 対応機種の未検証OS・ホスト環境での結果、または記録と違う測定値 / Results on an untested OS or host for a supported device, or measurements that differ from the recorded ones
 title: "[HW] "
 labels: ["hardware-report"]
 body:
@@ -9,7 +9,7 @@ body:
         いちばん価値のある報告です。**うまくいかなかった場合も歓迎します。**
         値が記録と違うこと自体が有益な情報です。
 
-        The most valuable kind of report. **Negative results are welcome too** --
+        The most valuable kind of report. **Negative results are welcome too** —
         a measurement that differs from the recorded one is useful information.
 
         ---
@@ -24,7 +24,7 @@ body:
     id: device
     attributes:
       label: 機種 / Device
-      placeholder: XREAL Air (gen 1) / Air 2 / Air 2 Pro / xbx a01+ ...
+      placeholder: XREAL Air (gen 1) / Air 2 / Air 2 Pro
     validations:
       required: true
 
@@ -33,7 +33,7 @@ body:
     attributes:
       label: 書き込んだイメージの SHA-256 / SHA-256 of the image you flashed
       description: ビルダが出力した値をそのまま。書き込んでいない場合は「なし」/ As printed by the builder. Put "none" if you did not flash.
-      placeholder: D5D34FB0ED0AB49B92D793CCF8384E61B1C1274AAC45293911F3CAF325BDC793
+      placeholder: 34AEE893AC697D314CB522D135AAE8C9222CC9461B62C096C616FEF44DE87AD8
     validations:
       required: true
 

@@ -44,8 +44,8 @@ PEEK_MAGIC = 0xA5
 # (address, name, what to expect)
 DEFAULT = [
     (0xE0B7, "model id (static EDID select)", "not 1..4 on the Air"),
-    (0xE0B8, "lane count", "4"),
-    (0xE0B9, "link rate", "0x0A=HBR / 0x06=RBR / 0x14=HBR2"),
+    (0xE0B8, "audio-route selector", "0=USB audio / 1=DP audio on the Air"),
+    (0xE0B9, "pixel-profile family", "0=even/native-2D family; verify before RGB"),
     (0xE0BA, "source of [06E8]", "0 or 1"),
     (0xE0BF, "timing struct select", "2 in mode 1"),
     (0xE086, "DP->MCU resolution class", "0 = 1080 lines, 2 = 1200 lines"),
@@ -72,13 +72,20 @@ PAIRS = {0xE7C3: "hsw+hbp /2", 0xE7C5: "vsw+vbp", 0xE7C7: "Hactive /2",
 
 
 def open_ctrl():
-    for pid in PIDS:
-        paths = {d["interface_number"]: d["path"] for d in hid.enumerate(VID, pid)}
-        if CTRL_IF in paths:
-            h = hid.device()
-            h.open_path(paths[CTRL_IF])
-            return h, pid
-    sys.exit("XREAL control interface MI_04 not found.")
+    controls = [
+        d for d in hid.enumerate(VID, 0)
+        if d.get("interface_number") == CTRL_IF
+        and int(d.get("product_id", 0)) in PIDS
+    ]
+    if not controls:
+        sys.exit("XREAL control interface MI_04 not found.")
+    if len(controls) != 1:
+        pids = ", ".join(f"0x{int(d['product_id']):04X}" for d in controls)
+        sys.exit(f"multiple XREAL control devices found ({pids}); connect exactly one pair")
+    entry = controls[0]
+    h = hid.device()
+    h.open_path(entry["path"])
+    return h, int(entry["product_id"])
 
 
 def read_reg(h, addr, wait=1.2, msgid=None):

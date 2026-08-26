@@ -3,7 +3,7 @@ r"""Build the XREAL Air (gen 1) DP bridge image.
 
 WHAT THIS DOES
     Takes the *official* DP7911 firmware container for the Air gen 1 -- the file
-    the vendor ships, named ``1140`` -- and applies 39 byte-level records so the
+    the vendor ships, named ``1140`` -- and applies guarded byte-level records so the
     glasses handle four input paths properly instead of one:
 
         1280x720            for HDMI converters and consoles that only do 720p
@@ -16,10 +16,17 @@ WHAT THIS DOES
     fixed-refresh modes stop leaking a CTA block that let hosts pick unrelated
     refresh rates.
 
-    The stock container carries the EDID templates of several models -- the
-    projectCode in the header is what selects one.  This build touches only the
-    Air gen 1 template; the Air 2 / HONOR / Air 2 Pro / Air 2 Ultra blocks are
-    left byte-identical to stock.
+    The finalized startup path selects the native RGB profile without changing
+    the external C0 state in adaptive mode, avoiding a second cold retraining.
+    The 720p finalizer forces the two-port scaler expansion state only on the
+    native-to-720p transition.  Settled 720p passes leave that state untouched,
+    removing the random boundary shimmer caused by repeated rewrites.  During
+    the full DP-audio transition, the receiver CDR is reset while HPD is low
+    before the EDID is rebuilt.
+
+    The stock container carries the EDID templates of several models; a runtime
+    model id selects the template in use. This build touches only the Air gen 1
+    template; every other model block is left byte-identical to stock.
 
 WHAT THIS DOES NOT DO
     It does not download, embed, or redistribute any vendor firmware, and it
@@ -41,8 +48,7 @@ VERIFICATION
 
     A mismatch anywhere is a hard failure.  There is no --force.
 
-This file is self-contained: standard library only, no imports from the
-research tree it was distilled from.
+This file is self-contained and uses only the standard library.
 """
 
 from __future__ import annotations
@@ -62,11 +68,11 @@ BANK0 = 0x10000            # tag is burned at the last byte of bank0
 
 SIZE = 50_632
 STOCK_SHA256 = "66A28C7BE1842D6837C68A5586CB0465099787F421427BE0CBE9691C858837DA"
-OUTPUT_SHA256 = "D5D34FB0ED0AB49B92D793CCF8384E61B1C1274AAC45293911F3CAF325BDC793"
-OUTPUT_CRC = 0xE888FA07
-OUTPUT_TAG = 0x1A
-EXPECTED_DIFFS = 913       # bytes that actually change, incl. container CRC and tag
-                           # (the records span 1025 bytes; some are unchanged inside a span)
+OUTPUT_SHA256 = "34AEE893AC697D314CB522D135AAE8C9222CC9461B62C096C616FEF44DE87AD8"
+OUTPUT_CRC = 0x428389C7
+OUTPUT_TAG = 0xAD
+PAIRED_MCU_SHA256 = "F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D"
+EXPECTED_DIFFS = 1142      # bytes that actually change, incl. container CRC and tag
 
 EXPECT_PROJECT = 0x0700    # air gen 1.  Flashing another project code bricks it.
 EXPECT_FWTYPE = 2          # dp
@@ -163,11 +169,11 @@ RECORDS: tuple[Record, ...] = (
      0x00318,
      bytes.fromhex("0474121b220000044c900474121afe7801121ab1900474121b16900488121b2200000465900488121afe900470121b16900488121afe90048c121b16"),
      bytes.fromhex("e790e0fe90e791e0ffe4fcfd900474121b1690e792e0fe90e793e0ffe4fcfd900488121b16900470121b1690048c121b160000000000000000000000")),
-    ("v31 horizontal endpoint ratio",
+    ("horizontal endpoint ratio",
      0x006DE,
      bytes.fromhex("ffffee34fffeed34fffdec34ff"),
      bytes.fromhex("00ffee3400feed3400fdec3400")),
-    ("v31 vertical endpoint ratio",
+    ("vertical endpoint ratio",
      0x007B6,
      bytes.fromhex("ffffee34fffeed34fffdec34ff"),
      bytes.fromhex("00ffee3400feed3400fdec3400")),
@@ -239,7 +245,7 @@ RECORDS: tuple[Record, ...] = (
      0x03135,
      bytes.fromhex("0a53616d65207265736f6c7574696f6e202c206e6f206e656564207363616c65"),
      bytes.fromhex("02b8186538030570e2b003661e653803c6cce2b00488286538050910e2b00000")),
-    ("Air 2 lineage: 720p audio/RGB native return",
+    ("720p audio/RGB native return",
      0x03212,
      bytes.fromhex("0a2054686520706879636c6b207265616368206d6178696d756d2076616c75652e2e2e"),
      bytes.fromhex("9006e7e06404701490e0bbe0700ee4fc7d037e667f1e900460121b16e47f0222000000")),
@@ -303,6 +309,90 @@ RECORDS: tuple[Record, ...] = (
      0x0BA80,
      bytes.fromhex("ee33fee4b5071aeeb40f16ae04af05be040fbf380c7bff7a3079f5123fc17f0022e49006d6f07f0122"),
      bytes.fromhex("bc020cbdd0099006e77404f07f012290e0bfe0b4020d90e598e030e7061234077f00227f0022000000")),
+    ("served 1080p60 horizontal sync",
+     0x001FF9,
+     bytes.fromhex("2c"),
+     bytes.fromhex("2a")),
+    ("served 1080p120 horizontal sync",
+     0x00201D,
+     bytes.fromhex("2c"),
+     bytes.fromhex("2e")),
+    ("served timing helper",
+     0x0020D4,
+     bytes.fromhex("0000000000000000"),
+     bytes.fromhex("90f910e054fef022")),
+    ("timing-tag vertical classifier helper",
+     0x003457,
+     bytes.fromhex("7402f09006d27401f090f96ce4f090f910e054fef0"),
+     bytes.fromhex("e054fe60107402f09006d214f090f96c14f0022094")),
+    ("timing-tag invalidation A",
+     0x0036C3,
+     bytes.fromhex("90e089e04402f0"),
+     bytes.fromhex("124d004402f000")),
+    ("timing-tag invalidation B",
+     0x00374C,
+     bytes.fromhex("90e089e04402f0"),
+     bytes.fromhex("124d004402f000")),
+    ("timing-tag invalidation C",
+     0x00377F,
+     bytes.fromhex("90e089e04402f0"),
+     bytes.fromhex("124d004402f000")),
+    ("served 1080p60 second table",
+     0x0044C7,
+     bytes.fromhex("2c"),
+     bytes.fromhex("2a")),
+    ("served 1080p120 second table",
+     0x0044EB,
+     bytes.fromhex("2c"),
+     bytes.fromhex("2e")),
+    ("timing-tag commit and true-720 helpers",
+     0x0045C2,
+     bytes.fromhex("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+     bytes.fromhex("c0d0c0f090e08ee06016f5f090e087e0b40400500b45f090e08ef0a3f4f0800790e08ee4f0a3f0d0f0d0d0023fc190e08e74b0f0a3744ff090d3742200000000")),
+    ("timing-tag invalidation D",
+     0x0049C7,
+     bytes.fromhex("90e089e04402f0"),
+     bytes.fromhex("124d004402f000")),
+    ("timing-tag classifier cave",
+     0x004D20,
+     bytes.fromhex("071fa3e0b4801aa3e0b40415a3e0b438107bff7a6779be123fc1e490e086f08025900448e0b40f1ea3e0b40019a3e0b40414a3e0b4380f7bff7a6779d0123fc190e0867401f0"),
+     bytes.fromhex("90044ae064047014a3e0643860086488700a74c0800274a090e08ef090d4012290e08ee4f0a3f090e089e022124d00024bfa2222222222222222222222222222222222222222")),
+    ("true-720 class and commit hook",
+     0x004E84,
+     bytes.fromhex("00f090d374"),
+     bytes.fromhex("01f01245b0")),
+    ("native timing-tag hook",
+     0x004EE1,
+     bytes.fromhex("e490d401"),
+     bytes.fromhex("124ce0e4")),
+    ("timing-tag invalidation E",
+     0x008F60,
+     bytes.fromhex("90e089e04402fff0"),
+     bytes.fromhex("124d004402fff000")),
+    ("final timing-tag commit hook",
+     0x00C0C5,
+     bytes.fromhex("023fc1"),
+     bytes.fromhex("024582")),
+    ("timing classifier hook",
+     0x00C56B,
+     bytes.fromhex("124bfa"),
+     bytes.fromhex("124d0c")),
+    ("DP-audio HPD-low helper: reset receiver CDR before EDID rebuild",
+     0x004D52,
+     bytes.fromhex("22222222222222222222222222222222"),
+     bytes.fromhex("12c1fb90e0b8e0b401057f0112c54b22")),
+    ("DP-audio HPD-low call -> conditional CDR helper",
+     0x008775,
+     bytes.fromhex("12c1fb"),
+     bytes.fromhex("124d12")),
+    ("late profile finalizer: native RGB, transition-latched 720p expansion",
+     0x003B53,
+     bytes.fromhex("4c766473206f7574707574203364204c696e65416c7465726e6174697665206d6f646520656e61626c65643b00"),
+     bytes.fromhex("0012ba26ef601290e086e014600a74029006d2f0900445f0229006e7e020e00c12a4709006e7e4f0900445f022")),
+    ("central profile expansion -> late finalizer",
+     0x004E5E,
+     bytes.fromhex("12ba26"),
+     bytes.fromhex("123b14")),
 )
 
 RECORD_BYTES = sum(len(old) for _l, _o, old, _n in RECORDS)
@@ -312,7 +402,7 @@ def build(stock: bytes) -> bytes:
     out = bytearray(stock)
     for label, offset, old, new in RECORDS:
         if out[offset:offset + len(old)] != old:
-            fail(f"stock image does not match record at 0x{offset:05X}: {label}")
+            fail(f"record precondition does not match at 0x{offset:05X}: {label}")
         out[offset:offset + len(new)] = new
     fix_bank0_tag(out)
     fix_container_crc(out)
@@ -337,9 +427,9 @@ DTD_1200_60 = bytes.fromhex("7440801871b03240582c950080b07400001e")
 DTD_1200_72 = bytes.fromhex("584d801871b03240582c950080b07400001e")
 DTD_1200_90 = bytes.fromhex("ae60801871b03240582c950080b07400001e")
 DTD_1200_120 = bytes.fromhex("e880801871b03240582c950080b07400001e")
-DTD_1080_60 = bytes.fromhex("023a801871382d40582c450080387400001e")
+DTD_1080_60 = bytes.fromhex("023a801871382d40582a450080387400001e")
 DTD_1080_90 = bytes.fromhex("0357801871382d40582c450080387400001e")
-DTD_1080_120 = bytes.fromhex("0474801871382d40582c450080387400001e")
+DTD_1080_120 = bytes.fromhex("0474801871382d40582e450080387400001e")
 DTDS_1200 = (DTD_1200_60, DTD_1200_90, DTD_1200_120)
 DTDS_1080 = (DTD_1080_60, DTD_1080_90, DTD_1080_120)
 
@@ -509,6 +599,51 @@ def verify_base_helper(image: bytes) -> int:
     return vectors
 
 
+def timing_tag_pair(family: int, refresh: int) -> tuple[int, int]:
+    """Return the committed tag/complement consumed by the paired MCU."""
+    if family not in (0xA0, 0xB0, 0xC0) or refresh not in range(4):
+        return 0, 0
+    tag = family | refresh
+    return tag, tag ^ 0xFF
+
+
+def verify_timing_tags(image: bytes) -> int:
+    scaler_commit = image[0x45F0:0x45FA]
+    if scaler_commit != bytes.fromhex("90e08e74b0f0a3744ff0"):
+        fail("true-720p late B0:4F commit changed")
+    pairs = {
+        timing_tag_pair(family, refresh)
+        for family in (0xA0, 0xB0, 0xC0)
+        for refresh in range(4)
+    }
+    if len(pairs) != 12 or any(tag ^ complement != 0xFF for tag, complement in pairs):
+        fail("timing-tag family/refresh model changed")
+    if timing_tag_pair(0x90, 0) != (0, 0) or timing_tag_pair(0xA0, 4) != (0, 0):
+        fail("unknown timing-tag state is not fail-closed")
+    return len(pairs)
+
+
+def verify_720_transition_latch(image: bytes) -> None:
+    helper = image[0x003B54:0x003B80]
+    expected = bytes.fromhex(
+        "12ba26ef6012"                    # native branch
+        "90e086e014600a"                # previous class 1 -> settled RET
+        "74029006d2f0900445f022"         # transition: two-port/scaler once
+        "9006e7e020e00c12a470"           # native gate and cleanup
+        "9006e7e4f0900445f022"
+    )
+    if helper != expected:
+        fail("transition-latched 720p finalizer changed")
+
+    def writes_sideband(scaler: bool, previous_class: int) -> bool:
+        return scaler and previous_class != 1
+
+    if not writes_sideband(True, 2):
+        fail("native-to-720p transition no longer writes the expansion state")
+    if writes_sideband(True, 1) or writes_sideband(False, 2):
+        fail("settled/native finalizer incorrectly rewrites the expansion state")
+
+
 # --- top level ---------------------------------------------------------------
 def verify_stock(stock: bytes) -> None:
     validate_container(stock, "stock image")
@@ -516,9 +651,11 @@ def verify_stock(stock: bytes) -> None:
         fail("this is not the expected Air gen 1 stock 1140.\n"
              f"       expected SHA-256 {STOCK_SHA256}\n"
              f"       got             {sha256(stock)}")
-    for label, offset, old, _new in RECORDS:
-        if stock[offset:offset + len(old)] != old:
-            fail(f"stock guard mismatch at 0x{offset:05X}: {label}")
+    probe = bytearray(stock)
+    for label, offset, old, new in RECORDS:
+        if probe[offset:offset + len(old)] != old:
+            fail(f"record guard mismatch at 0x{offset:05X}: {label}")
+        probe[offset:offset + len(new)] = new
 
 
 def verify_output(stock: bytes, image: bytes) -> None:
@@ -538,6 +675,8 @@ def verify_output(stock: bytes, image: bytes) -> None:
 
     verify_edid(image)
     vectors = verify_base_helper(image)
+    tag_cells = verify_timing_tags(image)
+    verify_720_transition_latch(image)
 
     h = head(image)
     if sha256(image) != OUTPUT_SHA256:
@@ -554,12 +693,17 @@ def verify_output(stock: bytes, image: bytes) -> None:
     print("  mode 1          : base 1200p60/90/120, CTA VIC4 + 1080p60/90/120")
     print("  mode 5/10/11    : base 1200p preferred + same-refresh 1080p, no CTA")
     print("  mode 3/4/9      : 3840x1200 @60/72/90 over HBR2, no CTA")
-    print("  720p sources    : VIC 4 advertised; the bridge scales it to full screen")
+    print("  startup         : native RGB profile without a second adaptive-mode C0 retrain")
+    print("  720p sources    : VIC 4; expansion state written once on entry, held when settled")
+    print("  DP audio        : receiver CDR reset while HPD is low before EDID rebuild")
+    print("  timing tags     : native/scaler family + refresh, committed with complement")
     print("  EDID contract   : decoded and checked")
     print(f"  base helper     : {vectors} emulated vectors, all slots as specified")
+    print(f"  tag model       : {tag_cells} family/refresh cells, unknowns fail closed")
     print(f"  container CRC   : 0x{h['stored_crc']:08X}")
     print(f"  bank0 tag       : 0x{image[TAG_OFF]:02X}")
     print(f"  sha256          : {sha256(image)}")
+    print(f"  paired MCU      : {PAIRED_MCU_SHA256}")
 
 
 def main() -> None:

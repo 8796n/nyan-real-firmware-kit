@@ -8,9 +8,11 @@ ride the same 64-byte frame.
 The implementation lives in `xreal/glasses.py` (framing, parsing, and device
 identification).
 
-**Scope.** The 64-byte frame format, the DP write sequence (110-113) and the MCU
-write message ids (62 / 68 / 38) were **confirmed on both the Air (gen 1) and
-the xbx a01+**. The Air 2 and Air 2 Pro use the same format.
+**Scope.** The 64-byte frame format and DP write sequence (110–113) were
+confirmed on the Air (gen 1), Air 2 / Air 2 Pro, and xbx a01+. The MCU write
+message-id family is common to Air and P55, but their START splits differ. The
+public DP and MCU flashers write Air, Air 2, and Air 2 Pro. Air 2 Pro uses the
+same p55 images and transfer format as Air 2, with separate PID checks.
 
 **XREAL One / One Pro / 1S do not use what is written here** -- they speak a
 different protocol built on 16-bit ops, and the tools under `xreal/` do not work
@@ -29,8 +31,8 @@ state.
 | PID | Model | State | Status in this kit |
 |---|---|---|---|
 | `0x0424` / `0x0423` | Air (gen 1) | APP / BOOT | verified |
-| `0x0428` / `0x0427` | Air 2 | APP / BOOT | same protocol, unverified |
-| `0x0432` / `0x0431` | Air 2 Pro | APP / BOOT | same protocol, unverified |
+| `0x0428` / `0x0427` | Air 2 | APP / BOOT | protocol and writes confirmed; writing supported |
+| `0x0432` / `0x0431` | Air 2 Pro | APP / BOOT | shared Air 2 image writes confirmed; writing supported |
 | `0x0441` / `0x0442` | xbx a01+ | APP / BOOT | same family, unverified |
 
 The PID table in `xreal/glasses.py` exists **to identify what is plugged in**,
@@ -52,9 +54,10 @@ The interface numbers are:
 Hard-coding `CTRL_IF` would miss BOOT forever, so `xreal/mcu_flash.py` picks
 from the interfaces actually enumerated for that PID.
 
-**Entering DP audio mode closes the USB composite device. That is stock
-behaviour.** No HID is enumerated at all while DP audio is active, so none of
-these tools can run.
+The kit's automatic no-USB DP-audio switch uses the same stock full transition
+as manual audio selection and genuine Adapter Attention. It closes the USB
+composite device and re-enumerates the EDID, so HID tools are unavailable after
+that transition. Replugging through a USB-capable host restores USB audio and HID.
 
 ---
 
@@ -88,7 +91,8 @@ data   = [23:]
 
 | Path | Status treated as ack |
 |---|---|
-| DP bridge write | `0` or `250` (`0xFA`) |
+| DP bridge PREPARE / START / TRANSMIT | `0` or `250` (`0xFA`) |
+| DP bridge FINISH | `0` only |
 | MCU write | `0` only |
 
 The five bytes at `[17:22]` are padding; handlers skip them and read from `[22]`.
@@ -123,6 +127,11 @@ TRANSMIT(112)  fw[64:] in 42-byte pieces  (1,204 of them for 50,632 bytes)
 FINISH(113)    the MCU verifies the container CRC; a mismatch returns status 5
 ```
 
+`xreal/dp_flash.py` writes Air, Air 2, and Air 2 Pro. Before writing, it requires a supported
+PID paired with an exact known SHA-256 for that model, a valid container CRC and
+bank0 tag, and the matching official stock recovery image. The shared
+projectCode `0x0900` does not prove whether a device is Air 2 or Air 2 Pro.
+
 **Once FINISH is acked, the bridge restarts itself and comes up on the new
 image.** No replug is needed.
 
@@ -145,10 +154,12 @@ rewritten, so a broken application can still be recovered from the bootloader.**
 |---:|---|---|
 | 62 | PREPARE | empty |
 | 68 | JUMP_TO_BOOT | empty |
-| 63 | START | `fw[0:24]`, exactly the container header |
-| 64 | TRANSMIT | `fw[24:]`, 42 bytes at a time |
+| 63 | START | first 24 bytes on Air; first 64 bytes split 42+22 on P55 |
+| 64 | TRANSMIT | bytes after START, 42 at a time |
 | 65 | FINISH | empty |
 | 66 | JUMP_TO_APP | empty |
+
+The flasher's Air (gen 1) sequence is:
 
 ```
 PREPARE(62)
@@ -160,11 +171,31 @@ FINISH(65)            the bootloader verifies the container CRC
 JUMP_TO_APP(66)
 ```
 
+The flasher's P55 (Air 2 / Air 2 Pro) sequence is:
+
+```
+PREPARE(62)
+JUMP_TO_BOOT(68)      wait for a status-0 ack
+[re-enumerates with the BOOT PID]
+START(63)             fw[0:42]
+START(63)             fw[42:64]
+TRANSMIT(64)          fw[64:] in 42-byte pieces
+FINISH(65)            the bootloader verifies the container CRC
+JUMP_TO_APP(66)
+```
+
+When the last TRANSMIT is shorter than 42 bytes, the official update procedure
+sends that same short chunk once more. The flasher reproduces this on
+both Air and P55. The current official Web updater sends `JUMP_TO_BOOT` once
+through its response-wait helper on both models, then continues after either a
+response or the roughly two-second timeout without using the returned status.
+The flasher follows tested hardware behavior instead. On Air,
 `JUMP_TO_BOOT` is **fired and forgotten.** Waiting for a reply both fails with
 OSError and burns the window in which the bootloader accepts a transfer, since
 it returns to the application if the update does not continue.
+P55 instead waits for the status-0 `JUMP_TO_BOOT` ack before re-enumeration.
 
-Measured timing:
+Timing measured on Air:
 
 - the device disappears roughly 0.35 s after `JUMP_TO_BOOT`
 - the BOOT PID appears at roughly 1.37 s
@@ -173,7 +204,13 @@ Measured timing:
 
 **If the device is already in BOOT, PREPARE and JUMP_TO_BOOT are unnecessary.**
 That is the recovery path when a broken application has left it stuck there;
-`xreal/mcu_flash.py` detects BOOT and goes straight to the transfer.
+`xreal/mcu_flash.py` detects BOOT and goes straight to the transfer, but only an
+official stock image with an exact known SHA-256 matching the connected model
+may be written. Normal writes likewise require a supported PID, an exact known SHA-256,
+a valid container CRC, the matching official recovery image, and an APP msgid
+38 version matching the reviewed baseline. They are limited to Air, Air 2, and
+Air 2 Pro. Air 2 / Pro share the image but are checked against their separate
+APP and BOOT PIDs.
 
 ---
 
@@ -202,15 +239,16 @@ The MCU build in this kit adds two.
 | msgid | Target | Request | Response |
 |---:|---|---|---|
 | `0x29` | DP bridge register | `[0xA5, page, reg]` | one byte |
-| `0x5B` | panel register | `[0xA5, eye, reg]` read / `[0x5A, eye, reg, val]` write | one byte |
+| `0x5B` | panel register | `[0xA5, eye, reg]` read | one byte |
 
 **Against stock firmware the first times out and the second returns `0x23` for
 every register.** `xreal/dpreg.py` and `xreal/panelreg.py` detect that and say
 so, rather than reporting nonsense.
 
-Panel registers live in RAM, so a bad write is undone by a power cycle. The one
-to be careful with is `reg 0x82`, which selects the register bank: put it back
-to 0 when you are done.
+An early research image also had a generic panel write beginning with `0x5A`.
+The public MCU reused that space for row-count helpers, so its msgid `0x5B` is
+read-only and `xreal/panelreg.py` exposes no write. Model-specific experiments
+that need one use a separately verified command with fixed target registers.
 
 ---
 

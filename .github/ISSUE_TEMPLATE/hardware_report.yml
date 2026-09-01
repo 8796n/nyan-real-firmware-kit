@@ -24,7 +24,7 @@ body:
     id: device
     attributes:
       label: 機種 / Device
-      placeholder: XREAL Air (gen 1) / Air 2 / Air 2 Pro
+      placeholder: XREAL Air (gen 1) / Air 2 / Air 2 Pro / MOKIN UC6101B
     validations:
       required: true
 
@@ -66,6 +66,7 @@ body:
       description: |
         **要約せず、そのまま貼ってください。** 役に立つのは次のあたりです。
 
+        - 対象機種のビルダー出力 / the target device's builder output
         - `python xreal/edid_dump.py`
         - `python common/display_signal.py`
         - `python xreal/display.py`

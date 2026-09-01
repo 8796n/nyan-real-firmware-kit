@@ -1,5 +1,7 @@
 # Never commit firmware. Not the vendor's, not the patched result.
 *.bin
+*.hex
+*.HEX
 
 # The stock files you supply live here; only the instructions are tracked.
 firmware/*

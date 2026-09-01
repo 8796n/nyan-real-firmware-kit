@@ -12,17 +12,17 @@ body:
         **Do not attach firmware binaries or download links,** and do not ask
         where to obtain firmware. Such posts are removed without discussion.
 
-        グラスが起動しなくなった場合は、先に README の
-        「うまくいかなかったとき」を読んでください。多くの故障は復旧できます。
+        XREAL Air系が起動しなくなった場合は、先に README の
+        「XREAL Air系でうまくいかなかったとき」を読んでください。多くの故障は復旧できます。
 
-        If the glasses will not start, read the troubleshooting section in the
-        README first. Most failures are recoverable.
+        If an XREAL Air-family device will not start, read its troubleshooting
+        section in the README first. Most failures are recoverable.
 
   - type: input
     id: tool
     attributes:
       label: どのツールか / Which tool
-      placeholder: xreal/air/build_dp.py / xreal/dp_flash.py / xreal/display.py ...
+      placeholder: xreal/air/build_dp.py / peripherals/mokin/uc6101b/build.py ...
     validations:
       required: true
 

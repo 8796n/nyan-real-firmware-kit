@@ -9,7 +9,7 @@ Pull requests containing firmware binaries are closed without discussion.
 
 ## 確認 / Checklist
 
-- [ ] `*.bin` を含めていない / No `*.bin` included
+- [ ] `*.bin`、`*.hex`、`*.HEX`を含めていない / No firmware image included
 - [ ] 端末のシリアル、個人のパス、認証情報を含めていない / No serial numbers, personal paths or credentials
 - [ ] ビルダに新しい依存を足していない / No new dependencies added to the builders
 - [ ] 検証を迂回する仕組みを足していない / Nothing added that bypasses the verification

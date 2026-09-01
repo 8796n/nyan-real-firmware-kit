@@ -1,16 +1,14 @@
 # nyan Real / Firmware Kit
 
-Firmware tooling that adapts display glasses for use with **nyan Real / Spatial Wall**.
+Tooling that turns official firmware for display glasses and peripherals into guarded, locally built images.
 
 *[日本語版はこちら / Japanese version](README.md)*
 
-Display-only glasses often ship with firmware that never offers the panel's real
-resolution, hides the best display mode, or leaves you with no audio on certain
-sources. This repository collects what it takes, per model, to remove those
-limits so the glasses work properly with Spatial Wall. **What that takes differs
-per model.** Every currently supported model uses a matched DP-bridge and MCU
-firmware update. The result is useful on its own even if you do not use Spatial
-Wall.
+For display glasses, the kit exposes panel resolution, display modes, and audio
+needed for **nyan Real / Spatial Wall**. For peripherals, it publishes reproducible,
+hardware-tested compatibility fixes. The current targets are XREAL Air-family
+glasses and a MOKIN UC6101B dock. Each builder is useful on its own even without
+Spatial Wall.
 
 > **nyan Real / Spatial Wall** is an application for using display glasses as a
 > spatial display, on Windows, macOS, GNOME and Raspberry Pi. Only its manual is
@@ -18,7 +16,7 @@ Wall.
 > → [nyan-real-spatial-wall](https://github.com/8796n/nyan-real-spatial-wall)
 
 **This project is not affiliated with, endorsed by, or connected to XREAL
-(formerly Nreal), Rokid, or any other manufacturer.** Product and brand names are
+(formerly Nreal), Rokid, MOKIN, or any other manufacturer.** Product and brand names are
 used only to identify the hardware this tooling was written against. No vendor
 code, branding, or firmware is distributed here.
 
@@ -26,7 +24,7 @@ code, branding, or firmware is distributed here.
 
 ## Read this before anything else
 
-**This tool writes firmware to your glasses. It can break them. You accept that
+**Images produced by this tooling rewrite firmware on the target device. They can break it. You accept that
 risk entirely, or you do not use it.**
 
 Three things are true at once, and you need all three:
@@ -48,7 +46,7 @@ Three things are true at once, and you need all three:
 
 **If you use an Air (gen 1) with Nebula on an XREAL Beam Pro, do not flash the
 Air build** — it stops working.
-See [About the vendor's own apps](#about-the-vendors-own-apps) below.
+See [About XREAL's own apps](#about-xreals-own-apps) below.
 
 We do not provide, host, mirror, or explain how to obtain vendor firmware, and we
 will not answer questions asking for it. Issues and pull requests containing
@@ -58,9 +56,9 @@ firmware binaries or download links will be removed.
 
 ## What changes from the official firmware
 
-The supported models are the XREAL Air (gen 1), Air 2, and Air 2 Pro. Each update
-uses a matched **DP bridge and MCU pair**. Air 2 and Air 2 Pro share both the
-official inputs and the outputs produced by this kit.
+The supported models are the XREAL Air (gen 1), Air 2, and Air 2 Pro, plus docks
+built around the MOKIN UC6101B. Each XREAL update uses a matched **DP bridge and
+MCU pair**. Air 2 and Air 2 Pro share both official inputs and kit outputs.
 
 ### XREAL Air (gen 1)
 
@@ -122,6 +120,18 @@ packing. This kit keeps native 2D and Full-SBS as RGB888 all the way to the OLED
 These are explanatory illustrations, not panel photographs. On shallow color
 gradients, the diagonal contour steps are reduced and the image looks smoother.
 
+### MOKIN UC6101B dock
+
+| Area | Official firmware | This build |
+|---|---|---|
+| Switch 2 system version 21.x | Does not enter TV mode | TV mode and two simultaneous DisplayPort outputs hardware-verified |
+| Nintendo VDM | Discards unknown commands without a response | Adds a type-`0x20` response and a protocol-reset pulse |
+| Charging and resume | Baseline | 15 V / 2.6 A contract and sleep resume hardware-verified |
+
+This builder only produces an Intel HEX image; it has no flashing support. See
+the [design](peripherals/mokin/uc6101b/docs/design.md) and
+[hardware verification](peripherals/mokin/uc6101b/docs/verification.md) for details.
+
 ---
 
 ## Preparation before flashing
@@ -138,6 +148,7 @@ the reviewed baseline.
 | Air (gen 1) | MCU | `firmware/07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` | `F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D` |
 | Air 2 / Air 2 Pro | DP | `firmware/air2/1140` | `350BACE369A83823D8EF867AE04AD07CF64D724C10EC7CEECFB83861AC9672F3` | `46556947E81DD7EBBD7F26B2541B63E0362804C166C020639DA908D2ABB2F486` |
 | Air 2 / Air 2 Pro | MCU | `firmware/air2/09.1.00.180_20240507.bin` | `C07633E97215346468A18F5306A10F800388A80CCD7DCFE800D468F4AB1BFD49` | `950CA9535AFBD02C40D97A167DB06ECFAEEBC35F6ADCCDED81829CC44A8BE4C9` |
+| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `0DB0BF009776115FA890BDE71C6CC858CD102693A4B3D2CEF99F207826372CF1` |
 
 Put the official files at those paths and keep another backup somewhere safe.
 `firmware/` is gitignored, so its contents cannot be committed to this repository.
@@ -164,6 +175,7 @@ Some display diagnostics are Windows-only.
 | Operation | Windows | Linux / macOS |
 |---|---|---|
 | Build DP / MCU images | Supported | Supported |
+| Build the UC6101B Intel HEX image | Supported | Supported |
 | Flash DP / MCU images | Supported and hardware-verified | Untested |
 | HID display and register diagnostics | Supported | Untested |
 | EDID capture and Windows wire-signal inspection | Supported | Not supported |
@@ -193,12 +205,13 @@ SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3318", MODE="0666"
 | `xreal/air/build_mcu.py` | Air (gen 1) MCU image | No |
 | `xreal/air2/build_dp.py` | Shared Air 2 / Air 2 Pro DP image | No |
 | `xreal/air2/build_mcu.py` | Shared Air 2 / Air 2 Pro MCU image | No |
+| `peripherals/mokin/uc6101b/build.py` | UC6101B Intel HEX image | No |
 
-Each builder checks the official input SHA and container CRC, every patch site's
-before bytes, the resulting SHA and CRC, the DP bank tag, and the complete change
-range. Unexpected inputs or outputs are rejected. There is no `--force` option.
+Each builder checks the official input SHA, every patch site's before bytes, the
+resulting SHA, device-specific CRCs or checksums, and the complete change range.
+Unexpected inputs or outputs are rejected. There is no `--force` option.
 
-### Flash images
+### Flash XREAL Air-family images
 
 | Script | Purpose | When it writes |
 |---|---|---|
@@ -226,7 +239,21 @@ still checked separately. There is no bypass option.
 
 ---
 
-## From build to flash
+## Build the MOKIN UC6101B image
+
+```bash
+python peripherals/mokin/uc6101b/build.py \
+  --src firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX \
+  --out uc6101b-switch2.hex
+```
+
+This command never accesses hardware. Confirm the output SHA against the table
+and keep the official image as your recovery path before flashing. See the
+[UC6101B instructions](peripherals/mokin/uc6101b/README.md) for details.
+
+---
+
+## Build and flash XREAL Air-family images
 
 Always use a DP and MCU pair for the same model. Run these commands from the
 repository root.
@@ -314,7 +341,7 @@ with the generated SHA and your own records.
 
 ---
 
-## Restoring official firmware
+## Restore official XREAL Air-family firmware
 
 The official files you saved must be at the paths in the preparation table.
 Connect only the target glasses, then restore the MCU first and the DP bridge
@@ -330,7 +357,7 @@ policy used for normal updates.
 
 ---
 
-## About the vendor's own apps
+## About XREAL's own apps
 
 **If you use an Air (gen 1) with Nebula on an XREAL Beam Pro, do not flash the
 Air build. It stops working.**
@@ -364,7 +391,8 @@ The builders do more than apply patches. Every run verifies:
 - generated EDID checksums, DTDs, VICs, and per-mode advertisement contracts;
 - all Air DP 8051 helper state vectors;
 - the Air 2-family DP EDID and RGB-profile contracts; and
-- the MCU display and recovery policy models.
+- the MCU display and recovery policy models; and
+- UC6101B Intel HEX records, Block 1 CRC-8, image checksum, and changed-address set.
 
 Detailed hardware results live in each model's `docs/verification.md`.
 See [the container format](docs/container-format.en.md) and
@@ -372,7 +400,7 @@ See [the container format](docs/container-format.en.md) and
 
 ---
 
-## If something goes wrong
+## If something goes wrong with an XREAL Air-family device
 
 **You selected an image for another model.** The flasher refuses to send unless
 the USB PID and fixed image SHA are an approved pair. Do not bypass the check;
@@ -399,13 +427,14 @@ completed write does not need a replug.
 xreal/          XREAL Air-family HID, flashing, and diagnostic tools
   air/          Air (gen 1) builders and design/verification documents
   air2/         Shared Air 2 / Air 2 Pro builders and documents
+peripherals/    Builders and design/verification documents for docks and adapters
 common/         Model-independent display diagnostics
 docs/           Container format, HID protocol, and common references
 firmware/       Your official input files; gitignored
 ```
 
-Models not listed above are unsupported. Do not write an Air-family image to a
-different product just because it uses the same USB vendor id.
+Models and firmware versions not listed above are unsupported. Do not reuse an
+image on a similar model or another product with the same USB vendor id.
 
 ---
 
@@ -422,9 +451,9 @@ any form.
 
 ## Contributing
 
-Bug reports and hardware results from supported models are welcome, especially
-from untested operating systems or hosts and whenever observed values differ
-from a model's `docs/verification.md`.
+Bug reports and hardware results from supported models, as well as verifiable
+support for new devices, are welcome. Results from untested operating systems or
+hosts and values that differ from a model's `docs/verification.md` are especially useful.
 
 **Do not post firmware binaries, download links, or requests for them.** Such
 issues and comments will be removed without discussion.

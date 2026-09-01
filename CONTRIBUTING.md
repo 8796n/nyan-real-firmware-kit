@@ -28,9 +28,11 @@ Issue、Pull Request、コメント、いずれも対象です。該当するも
 - 未検証の OS（Linux、macOS）
 - 未検証のホスト環境（AMD、Intel 内蔵、Apple Silicon、各種 HDMI 変換器、ゲーム機）
 - `xreal/air/docs/verification.md`または`xreal/air2/docs/verification.md`の表と**違う値**が出たケース
+- `peripherals/mokin/uc6101b/docs/verification.md`の未確認項目または**違う結果**
 
-対象はREADMEの「公式ファームウェアから変わること」に記載された機種だけです。対応機種以外の検証結果や対応追加は
-受け付けません。
+READMEの「公式ファームウェアから変わること」に記載された機種の報告を優先します。新機種対応は、
+公式入力SHA、全変更のbefore byte、決定論的な出力SHA、機器固有checksum、解析根拠、復旧手段、
+実機確認範囲を揃えたものを歓迎します。
 
 値が違うこと自体が有益な情報です。「合わなかった」報告を歓迎します。
 
@@ -48,16 +50,17 @@ Issue、Pull Request、コメント、いずれも対象です。該当するも
 
 ## コードを送るとき
 
-- **`*.bin` を含めないでください。** `.gitignore` で弾いていますが、念のため確認してください
+- **`*.bin`、`*.hex`、`*.HEX`を含めないでください。** `.gitignore` で弾いていますが、念のため確認してください
 - 端末のシリアル番号、個人のファイルパス、認証情報を含めないでください
 - ツールのコメントとメッセージは英語です。ドキュメントは日本語が正本です
 - ビルダは標準ライブラリだけで動きます。**依存を増やさないでください**
 
 ### 検証を弱めないでください
 
-ビルダは結果を検証してから返します。SHAの照合、レコードごとのbefore検査、EDIDのデコードに加え、
+ビルダは結果を検証してから返します。SHAの照合、レコードごとのbefore検査に加え、
 Air DPでは8051 helperの全状態ベクタ、Air 2系DPではEDID / RGB profile contract、
-MCUでは表示・復旧policy modelを検査します。**`--force`はありません。**
+MCUでは表示・復旧policy model、UC6101BではIntel HEX record、Block 1 CRC、image checksumを
+検査します。**`--force`はありません。**
 これは意図的な設計です。検証を迂回する仕組みを追加する Pull Request は受け付けません。
 
 書き込みツールも同じです。対応する接続PID、その機種向けの既知SHA-256との完全一致、
@@ -68,7 +71,7 @@ projectCodeはその一部にすぎず、Air 2とAir 2 Proは`0x0900`を共有�
 
 ## 安全について
 
-**このツールはファームウェアを書き換えます。壊れる可能性があります。**
+**このツールで生成したイメージは機器のファームウェアを書き換えます。壊れる可能性があります。**
 
 復旧手段は、あなたが入手した公式ファームウェアのファイルだけです。機種によっては
 本体から吸い出せません。詳細は README の「最初に読んでください」を参照してください。
@@ -109,10 +112,14 @@ not for you.
   converters, consoles)
 - **any case where you measure something different** from the tables in
   `xreal/air/docs/verification.md` or `xreal/air2/docs/verification.md`
+- untested cases or **different results** from
+  `peripherals/mokin/uc6101b/docs/verification.md`
 
-The scope is limited to devices listed under "What changes from the official
-firmware" in the README. Test results or support additions for other devices are
-not accepted.
+Reports for devices listed under "What changes from the official firmware" in
+the README take priority. New-device support is welcome when it includes the
+official input SHA, before bytes for every change, deterministic output SHA,
+device-specific checksums, analysis, a recovery path, and documented hardware
+test coverage.
 
 A mismatch is useful information. Reports that something did not line up are
 welcome.
@@ -131,7 +138,7 @@ Include how to reproduce it and what the tools actually printed.
 
 ## Sending code
 
-- **Do not include `*.bin`.** `.gitignore` blocks them; check anyway
+- **Do not include `*.bin`, `*.hex`, or `*.HEX`.** `.gitignore` blocks them; check anyway
 - No device serial numbers, personal file paths or credentials
 - Comments and messages in the tools are English. Documentation is
   Japanese-primary
@@ -139,12 +146,13 @@ Include how to reproduce it and what the tools actually printed.
 
 ### Do not weaken the verification
 
-The builders prove their result before returning it: hash checks, per-record
-before-image guards, and an EDID decode. Air DP additionally runs the 8051 helper
+The builders prove their result before returning it: hash checks and per-record
+before-image guards. Air DP additionally runs the 8051 helper
 over every state vector; Air 2-family DP checks the EDID and RGB-profile
-contracts; MCU builders check their display and recovery policy models. **There
-is no `--force`,** and that is deliberate. Pull requests that add a way around
-the verification will not be accepted.
+contracts; MCU builders check their display and recovery policy models; and the
+UC6101B builder validates Intel HEX records, the Block 1 CRC, and the image
+checksum. **There is no `--force`,** and that is deliberate. Pull requests that
+add a way around the verification will not be accepted.
 
 The same goes for the flashers. They require a supported connected PID, an exact
 known SHA-256 for that model, the container CRC, the DP bank0 tag, and the
@@ -155,7 +163,7 @@ Air 2 and Air 2 Pro share `0x0900`.
 
 ## Safety
 
-**These tools rewrite firmware. They can break your glasses.**
+**Images produced by these tools rewrite firmware. They can break the device.**
 
 Your only recovery path is the official firmware file you obtained. On some
 models the device cannot be read back at all. See "Read this before anything

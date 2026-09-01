@@ -1,20 +1,19 @@
 # nyan Real / Firmware Kit
 
-電気メガネのファームウェアを **nyan Real / Spatial Wall** 向けに改修するためのツール。
+メガネ型ディスプレイや周辺機器の公式ファームウェアを、手元で検証付きイメージへ改修するツール。
 
 *[English version](README.en.md)*
 
-映像出力専用のメガネ型ディスプレイは、素の状態ではパネル本来の解像度を出さなかったり、
-最上位の表示モードが隠されていたり、特定の入力機器で音が出なかったりします。
-このリポジトリは、そうした制限を取り除いて Spatial Wall で快適に使えるようにするための、
-機種ごとの手当てをまとめたものです。現在の対応機種はいずれもDPブリッジとMCUの
-ファームウェアを対で更新します。Spatial Wallを使わない場合でも単体で有用です。
+メガネ向けには、パネル本来の解像度、表示モード、音声などを **nyan Real / Spatial Wall** で
+快適に使うための改修を収録しています。周辺機器向けには、実機で再現・検証した互換性修正を
+収録します。現在はXREAL Air系メガネとMOKIN UC6101B搭載ドックに対応しています。
+Spatial Wallを使わない場合でも各ビルダーは単体で利用できます。
 
 > **nyan Real / Spatial Wall** は電気メガネで空間ディスプレイを扱うためのアプリケーションです
 > （Windows / macOS / GNOME / Raspberry Pi）。現在はマニュアルのみ先行公開で、本体は未公開です。
 > → [nyan-real-spatial-wall](https://github.com/8796n/nyan-real-spatial-wall)
 
-**本プロジェクトは XREAL（旧 Nreal）、Rokid をはじめとするいかなるメーカーとも関係がなく、
+**本プロジェクトは XREAL（旧 Nreal）、Rokid、MOKINをはじめとするいかなるメーカーとも関係がなく、
 承認も後援も受けていません。** 各社の製品名・ブランド名は、このツールが対象とする
 ハードウェアを特定する目的でのみ使用しています。メーカーのコード・ブランド・
 ファームウェアはここでは一切配布しません。
@@ -23,7 +22,7 @@
 
 ## 最初に読んでください
 
-**このツールはグラスのファームウェアを書き換えます。壊れる可能性があります。
+**このツールで生成したイメージは対象機器のファームウェアを書き換えます。壊れる可能性があります。
 そのリスクを全面的に引き受けられない場合は使わないでください。**
 
 次の3点は同時に成り立っていて、3つとも理解する必要があります。
@@ -45,7 +44,7 @@
 
 **XREAL Air（第1世代）をBeam ProのNebulaで使うなら、Air用ビルドを書き込まないでください。
 動かなくなります。**
-詳細は[純正アプリについて](#純正アプリについて)を参照してください。
+詳細は[XREAL純正アプリについて](#xreal純正アプリについて)を参照してください。
 
 ベンダーのファームウェアの提供・ホスティング・ミラー・入手方法の説明は行いません。
 入手方法を尋ねる質問にも回答しません。ファームウェアのバイナリやダウンロードリンクを含む
@@ -55,8 +54,9 @@ Issue および Pull Request は削除します。
 
 ## 公式ファームウェアから変わること
 
-対応しているのはXREAL Air（第1世代）、Air 2、Air 2 Proです。いずれもDPブリッジとMCUを
-**対で更新**します。Air 2とAir 2 Proは公式イメージと本キットの出力を共有します。
+対応しているのはXREAL Air（第1世代）、Air 2、Air 2 Pro、およびMOKIN UC6101B搭載ドックです。
+XREAL Air系はいずれもDPブリッジとMCUを**対で更新**します。Air 2とAir 2 Proは公式イメージと
+本キットの出力を共有します。
 
 ### XREAL Air（第1世代）
 
@@ -113,6 +113,18 @@ Full-SBSをRGB888のままOLEDへ送り、not RGBへの変換を避けます。
 画像は見え方の違いを示す模式図で、パネルを撮影したものではありません。緩やかな色
 グラデーションでは斜めに連なる階調境界が減り、より滑らかに見えます。
 
+### MOKIN UC6101B搭載ドック
+
+| 項目 | 公式ファームウェア | このビルド |
+|---|---|---|
+| Switch 2システムバージョン21.x | TVモードへ移行しない | TVモード、DisplayPort 2台同時出力を実機確認 |
+| Nintendo VDM | 未認識commandを無応答で破棄 | 種別`0x20`の応答と状態リセット時パルスを追加 |
+| 充電・復帰 | 基準 | 15 V / 2.6 A契約とスリープ復帰を実機確認 |
+
+このビルダーはIntel HEXを生成するだけで、書き込み機能は含みません。変更内容は
+[`peripherals/mokin/uc6101b/docs/design.md`](peripherals/mokin/uc6101b/docs/design.md)、実機確認範囲は
+[`peripherals/mokin/uc6101b/docs/verification.md`](peripherals/mokin/uc6101b/docs/verification.md)を参照してください。
+
 ---
 
 ## 書き込み前の準備
@@ -128,6 +140,7 @@ Full-SBSをRGB888のままOLEDへ送り、not RGBへの変換を避けます。
 | Air（第1世代） | MCU | `firmware/07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` | `F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D` |
 | Air 2 / Air 2 Pro | DP | `firmware/air2/1140` | `350BACE369A83823D8EF867AE04AD07CF64D724C10EC7CEECFB83861AC9672F3` | `46556947E81DD7EBBD7F26B2541B63E0362804C166C020639DA908D2ABB2F486` |
 | Air 2 / Air 2 Pro | MCU | `firmware/air2/09.1.00.180_20240507.bin` | `C07633E97215346468A18F5306A10F800388A80CCD7DCFE800D468F4AB1BFD49` | `950CA9535AFBD02C40D97A167DB06ECFAEEBC35F6ADCCDED81829CC44A8BE4C9` |
+| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `0DB0BF009776115FA890BDE71C6CC858CD102693A4B3D2CEF99F207826372CF1` |
 
 公式ファイルは上表の場所へ置き、別の安全な場所にもバックアップしてください。`firmware/`は
 gitignoreされており、中身がこのリポジトリへコミットされることはありません。
@@ -152,6 +165,7 @@ HIDツールも動作する見込みですが未検証です。Windows専用の�
 | 処理 | Windows | Linux / macOS |
 |---|---|---|
 | DP / MCUイメージのビルド | 対応 | 対応 |
+| UC6101B Intel HEXのビルド | 対応 | 対応 |
 | DP / MCUの書き込み | 対応・実機確認済み | 未検証 |
 | HID表示・レジスタ診断 | 対応 | 未検証 |
 | EDID取得、Windows線上信号の確認 | 対応 | 非対応 |
@@ -179,11 +193,12 @@ SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3318", MODE="0666"
 | `xreal/air/build_mcu.py` | Air（第1世代）のMCUイメージ | しない |
 | `xreal/air2/build_dp.py` | Air 2 / Air 2 Pro共通DPイメージ | しない |
 | `xreal/air2/build_mcu.py` | Air 2 / Air 2 Pro共通MCUイメージ | しない |
+| `peripherals/mokin/uc6101b/build.py` | UC6101B Intel HEX | しない |
 
-各ビルダーは公式入力のSHAとコンテナCRC、全パッチ位置のbefore byte、生成後のSHA / CRC、
-DP bank tag、変更範囲を検査します。想定外の入力や結果は拒否し、`--force`はありません。
+各ビルダーは公式入力のSHA、全パッチ位置のbefore byte、生成後のSHA、機器固有のCRCまたは
+checksum、変更範囲を検査します。想定外の入力や結果は拒否し、`--force`はありません。
 
-### イメージを書き込む
+### XREAL Air系のイメージを書き込む
 
 | スクリプト | 役割 | 書き込み条件 |
 |---|---|---|
@@ -210,7 +225,21 @@ DP bank tag、変更範囲を検査します。想定外の入力や結果は拒
 
 ---
 
-## ビルドから書き込みまで
+## MOKIN UC6101Bイメージを作る
+
+```bash
+python peripherals/mokin/uc6101b/build.py \
+  --src firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX \
+  --out uc6101b-switch2.hex
+```
+
+この処理はハードウェアへアクセスしません。書き込み前に出力SHAが準備表と一致することを確認し、
+公式イメージを復旧用に保管してください。詳しい使い方と書き込み時の注意は
+[`peripherals/mokin/uc6101b/README.md`](peripherals/mokin/uc6101b/README.md)にあります。
+
+---
+
+## XREAL Air系のビルドから書き込みまで
 
 DPとMCUは必ず同じ機種向けの組を使ってください。以下はリポジトリのルートで実行します。
 
@@ -291,7 +320,7 @@ fallbackへ落ちているため、[うまくいかなかったとき](#うま�
 
 ---
 
-## 純正へ戻す
+## XREAL Air系を純正へ戻す
 
 最初に保存した純正ファイルが準備表の場所に必要です。対応グラスだけを直接USB接続し、MCUを先、
 DPを後の順に戻します。
@@ -305,7 +334,7 @@ python xreal/dp_flash.py  --restore --flash
 
 ---
 
-## 純正アプリについて
+## XREAL純正アプリについて
 
 **XREAL Air（第1世代）をBeam ProのNebulaで使うなら、Air用ビルドを書き込まないでください。
 動かなくなります。**
@@ -337,6 +366,7 @@ USBデータを運ばないHDMI変換経路では、自動DP音声の完全切�
 - 生成EDIDのchecksum、DTD / VIC、論理モードごとの広告内容
 - Air DPの8051 helper全状態ベクタ、Air 2系DPのEDID / RGB profile contract
 - MCU側の表示・復旧policy model
+- UC6101BのIntel HEX record、Block 1 CRC-8、image checksum、変更アドレス集合
 
 実機の詳細は各機種の`docs/verification.md`にあります。
 共通仕様は[コンテナ形式](docs/container-format.md)と
@@ -344,7 +374,7 @@ USBデータを運ばないHDMI変換経路では、自動DP音声の完全切�
 
 ---
 
-## うまくいかなかったとき
+## XREAL Air系でうまくいかなかったとき
 
 **別機種イメージを選んだ。** フラッシャーはUSB PIDと固定SHAの組が一致しなければ送信を拒否します。
 判定を回避せず、接続中の機種とファイル名を確認してください。
@@ -367,12 +397,13 @@ MCUをリセットしてからやり直してください。正常に完了し�
 xreal/          XREAL Air系のHID、書き込み、診断ツール
   air/          Air（第1世代）のビルダーと設計・検証文書
   air2/         Air 2 / Air 2 Pro共通のビルダーと設計・検証文書
+peripherals/    ドック、変換器など周辺機器のビルダーと設計・検証文書
 common/         機種非依存の表示診断
 docs/           コンテナ形式、HIDプロトコル、共通資料
 firmware/       利用者が用意した公式ファイルの置き場所（gitignore）
 ```
 
-表にない機種は対象外です。同じVIDを持つ別系統の機種へAir用イメージを書き込まないでください。
+表にない機種とファームウェア版は対象外です。似た型番や同じVIDを持つ別系統の機種へ流用しないでください。
 
 ---
 
@@ -387,8 +418,8 @@ firmware/       利用者が用意した公式ファイルの置き場所（giti
 
 ## コントリビュート
 
-対応機種でのバグ報告と実機検証結果を歓迎します。とくに未検証のOS・ホスト環境からの報告と、
-各機種の`docs/verification.md`と違う値が出たケースは貴重です。
+対応機種でのバグ報告と実機検証結果、および検証可能な新機種対応を歓迎します。とくに未検証の
+OS・ホスト環境からの報告と、各機種の`docs/verification.md`と違う値が出たケースは貴重です。
 
 **ファームウェアのバイナリ、ダウンロードリンク、およびそれらを求める投稿はしないでください。**
 該当するIssueやコメントは議論なく削除します。

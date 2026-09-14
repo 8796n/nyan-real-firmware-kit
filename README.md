@@ -117,9 +117,14 @@ Full-SBSをRGB888のままOLEDへ送り、not RGBへの変換を避けます。
 
 | 項目 | 公式ファームウェア | このビルド |
 |---|---|---|
-| Switch 2システムバージョン21.x | TVモードへ移行しない | TVモード、DisplayPort 2台同時出力を実機確認 |
+| Switch 2システムバージョン21.x | TVモードへ移行しない | 従来版でTVモード、USB-C上のDisplayPort映像の2台同時出力を実機確認 |
 | Nintendo VDM | 未認識commandを無応答で破棄 | 種別`0x20`の応答と状態リセット時パルスを追加 |
-| 充電・復帰 | 基準 | 15 V / 2.6 A契約とスリープ復帰を実機確認 |
+| 23.0の純正ドックアップデートへの追従 | コマンド`0x02`への応答値`0003005F` | `0003006E`へ変更。23.0で変更後の起動を確認 |
+| VRR | 未確認 | **実動作未確認**。外部ディスプレイVRR設定の有効化のみ確認 |
+| 充電・復帰 | 基準 | 従来版で15 V / 2.6 A契約とスリープ復帰を実機確認 |
+
+この更新はドック応答値の変更であり、VRR実装の追加ではありません。応答値の変更がVRR設定の
+可否に影響したかも未確認です。
 
 このビルダーはIntel HEXを生成するだけで、書き込み機能は含みません。変更内容は
 [`peripherals/mokin/uc6101b/docs/design.md`](peripherals/mokin/uc6101b/docs/design.md)、実機確認範囲は
@@ -140,7 +145,7 @@ Full-SBSをRGB888のままOLEDへ送り、not RGBへの変換を避けます。
 | Air（第1世代） | MCU | `firmware/07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` | `F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D` |
 | Air 2 / Air 2 Pro | DP | `firmware/air2/1140` | `350BACE369A83823D8EF867AE04AD07CF64D724C10EC7CEECFB83861AC9672F3` | `46556947E81DD7EBBD7F26B2541B63E0362804C166C020639DA908D2ABB2F486` |
 | Air 2 / Air 2 Pro | MCU | `firmware/air2/09.1.00.180_20240507.bin` | `C07633E97215346468A18F5306A10F800388A80CCD7DCFE800D468F4AB1BFD49` | `950CA9535AFBD02C40D97A167DB06ECFAEEBC35F6ADCCDED81829CC44A8BE4C9` |
-| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `0DB0BF009776115FA890BDE71C6CC858CD102693A4B3D2CEF99F207826372CF1` |
+| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `AD718ED4B90948414EA24D3D1FAD77CE16493BF343B283B8FD76E212737FE108` |
 
 公式ファイルは上表の場所へ置き、別の安全な場所にもバックアップしてください。`firmware/`は
 gitignoreされており、中身がこのリポジトリへコミットされることはありません。

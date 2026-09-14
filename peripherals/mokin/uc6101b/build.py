@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the verified MOKIN UC6101B Nintendo Switch 2 compatibility image.
+"""Build the MOKIN UC6101B image following the Switch 2 23.0 dock update.
 
 The tool accepts one exact official Intel HEX image, applies a guarded patch,
 recalculates the LT8712SX Block 1 CRC, and verifies the deterministic result.
@@ -15,14 +15,18 @@ from pathlib import Path
 
 
 STOCK_SHA256 = "BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D"
-OUTPUT_SHA256 = "0DB0BF009776115FA890BDE71C6CC858CD102693A4B3D2CEF99F207826372CF1"
-OUTPUT_CHECKSUM = 0x11520DA
+OUTPUT_SHA256 = "AD718ED4B90948414EA24D3D1FAD77CE16493BF343B283B8FD76E212737FE108"
+OUTPUT_CHECKSUM = 0x11520CD
 
+VERSION_REPLY_OFFSET = 0x4C9F
 FALLBACK_OFFSET = 0xD51F
 RESET_TAIL_OFFSET = 0xF27C
 RESET_STUB_OFFSET = 0xF89D
 BLOCK1_CRC_OFFSET = 0xFFFF
 
+# Nintendo command 0x02 copies this little-endian value to its reply buffer.
+VERSION_REPLY_BEFORE = bytes.fromhex("5F 00 03 00")
+VERSION_REPLY_AFTER = bytes.fromhex("6E 00 03 00")
 FALLBACK_BEFORE = bytes.fromhex("39")
 FALLBACK_AFTER = bytes.fromhex("86")
 RESET_TAIL_BEFORE = bytes.fromhex("02 61 19")
@@ -181,6 +185,7 @@ def build(stock_raw: bytes, source: Path) -> bytes:
 
     records = read_records(stock_raw, source)
     stock = image(records)
+    replace(records, VERSION_REPLY_OFFSET, VERSION_REPLY_BEFORE, VERSION_REPLY_AFTER)
     replace(records, FALLBACK_OFFSET, FALLBACK_BEFORE, FALLBACK_AFTER)
     replace(records, RESET_TAIL_OFFSET, RESET_TAIL_BEFORE, RESET_TAIL_AFTER)
     insert_data(records, RESET_STUB_OFFSET, RESET_STUB)
@@ -190,7 +195,10 @@ def build(stock_raw: bytes, source: Path) -> bytes:
     replace(records, BLOCK1_CRC_OFFSET, BLOCK1_CRC_BEFORE, bytes((crc,)))
     memory = image(records)
 
-    expected_changes = {FALLBACK_OFFSET, RESET_TAIL_OFFSET + 1, RESET_TAIL_OFFSET + 2, BLOCK1_CRC_OFFSET}
+    expected_changes = {
+        VERSION_REPLY_OFFSET, FALLBACK_OFFSET,
+        RESET_TAIL_OFFSET + 1, RESET_TAIL_OFFSET + 2, BLOCK1_CRC_OFFSET,
+    }
     expected_changes.update(range(RESET_STUB_OFFSET, RESET_STUB_OFFSET + len(RESET_STUB)))
     changed = {
         address
@@ -213,18 +221,20 @@ def build(stock_raw: bytes, source: Path) -> bytes:
 
     print("=== MOKIN UC6101B - Nintendo Switch 2 compatibility ===")
     print(f"  stock input     : SHA-256 {digest}")
+    print("  command 0x02    : 0003005F -> 0003006E (Switch 2 23.0 dock update)")
     print("  response        : unknown Nintendo VDM -> type 0x20 fallback")
     print("  reset           : XDATA 0xA110 bit 1 clear, delay, set")
     print(f"  changed bytes   : {len(changed)}")
     print(f"  Block 1 CRC-8   : 0x{memory[BLOCK1_CRC_OFFSET]:02X}")
     print(f"  image checksum  : 0x{filled_checksum(memory):X}")
     print(f"  sha256          : {sha256(output)}")
+    print("  VRR             : actual variable-refresh output not verified")
     return output
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build the verified UC6101B Nintendo Switch 2 compatibility image.",
+        description="Build the UC6101B image following the Switch 2 23.0 dock update.",
         epilog="You supply the official firmware. This tool contains no firmware and touches no hardware.",
     )
     parser.add_argument("--src", type=Path, required=True, metavar="STOCK_HEX")

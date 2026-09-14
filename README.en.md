@@ -124,9 +124,14 @@ gradients, the diagonal contour steps are reduced and the image looks smoother.
 
 | Area | Official firmware | This build |
 |---|---|---|
-| Switch 2 system version 21.x | Does not enter TV mode | TV mode and two simultaneous DisplayPort outputs hardware-verified |
+| Switch 2 system version 21.x | Does not enter TV mode | TV mode and two simultaneous DisplayPort video outputs over USB-C verified with the previous build |
 | Nintendo VDM | Discards unknown commands without a response | Adds a type-`0x20` response and a protocol-reset pulse |
-| Charging and resume | Baseline | 15 V / 2.6 A contract and sleep resume hardware-verified |
+| Following the official dock update on 23.0 | Command-`0x02` reply value `0003005F` | Changes the reply to `0003006E`; boot confirmed on 23.0 |
+| VRR | Unverified | **Actual operation unverified**; only enabling the external-display VRR setting was confirmed |
+| Charging and resume | Baseline | 15 V / 2.6 A contract and sleep resume verified with the previous build |
+
+This update changes a dock reply value; it adds no VRR implementation. Whether
+the reply change affected the availability of the VRR setting is also unconfirmed.
 
 This builder only produces an Intel HEX image; it has no flashing support. See
 the [design](peripherals/mokin/uc6101b/docs/design.md) and
@@ -148,7 +153,7 @@ the reviewed baseline.
 | Air (gen 1) | MCU | `firmware/07.1.02.387_20240428.bin` | `B1784C6D618D3CF6F03D77A93442C3267A425CB2BE415E8912539E165645A3E7` | `F292B1245F2F26E209D6DACA6ADF50A58534B4EAEDC48C4FC8705703C879223D` |
 | Air 2 / Air 2 Pro | DP | `firmware/air2/1140` | `350BACE369A83823D8EF867AE04AD07CF64D724C10EC7CEECFB83861AC9672F3` | `46556947E81DD7EBBD7F26B2541B63E0362804C166C020639DA908D2ABB2F486` |
 | Air 2 / Air 2 Pro | MCU | `firmware/air2/09.1.00.180_20240507.bin` | `C07633E97215346468A18F5306A10F800388A80CCD7DCFE800D468F4AB1BFD49` | `950CA9535AFBD02C40D97A167DB06ECFAEEBC35F6ADCCDED81829CC44A8BE4C9` |
-| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `0DB0BF009776115FA890BDE71C6CC858CD102693A4B3D2CEF99F207826372CF1` |
+| MOKIN UC6101B | Intel HEX | `firmware/peripherals/mokin/uc6101b/XL_UC6101B_LT8712SX_Cto2DP+PD_V000612__20250724_CKS_0x1152B5C_WithPDtoC.HEX` | `BE3C7FD831B7D3C1C6D822D70C72EACF2DA21958E03C6448A9857DB6D762AA7D` | `AD718ED4B90948414EA24D3D1FAD77CE16493BF343B283B8FD76E212737FE108` |
 
 Put the official files at those paths and keep another backup somewhere safe.
 `firmware/` is gitignored, so its contents cannot be committed to this repository.
